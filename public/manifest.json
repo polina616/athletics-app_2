@@ -1,0 +1,9 @@
+{
+  "name": "Athletics Meet Protocol",
+  "short_name": "Athletics",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0D12",
+  "theme_color": "#E0442C",
+  "icons": []
+}

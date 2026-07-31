@@ -1,0 +1,290 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Design tokens — Athletics Meet Protocol
+   Dark-first data UI for judges/secretariat working long shifts under
+   stadium lighting. Terracotta = "live / primary action", signal blue =
+   "secondary / analytical", gold = "record / medal". All numeric data
+   (results, points, ranks, sums) renders in tabular-nums monospace so
+   figures never shift width on live recalculation.
+   ========================================================================== */
+
+:root {
+  /* accents */
+  --track: #E0442C;
+  --track-dark: #B8341F;
+  --track-soft: rgba(224, 68, 44, 0.14);
+  --gold: #C9971F;
+  --gold-soft: rgba(201, 151, 31, 0.16);
+  --blue: #1E4FCB;
+  --blue-soft: rgba(30, 79, 203, 0.14);
+
+  /* status */
+  --status-ok: #22C55E;
+  --status-ok-soft: rgba(34, 197, 94, 0.14);
+  --status-fail: #EF4444;
+  --status-fail-soft: rgba(239, 68, 68, 0.14);
+  --status-pass: #8A93A6;
+  --status-pass-soft: rgba(138, 147, 166, 0.14);
+  --status-record: #C9971F;
+  --status-record-soft: rgba(201, 151, 31, 0.16);
+
+  /* surfaces — light mode (fallback) */
+  --bg: #F0F2F6;
+  --surface: #FFFFFF;
+  --surface-2: #F4F5F8;
+  --border: rgba(15, 18, 27, 0.1);
+  --border-strong: rgba(15, 18, 27, 0.18);
+  --ink: #161A23;
+  --muted: #6C7486;
+}
+
+.dark {
+  --bg: #0B0D12;
+  --surface: #12151C;
+  --surface-2: #171B24;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --ink: #F2F4F8;
+  --muted: #8A93A6;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-feature-settings: "cv11", "ss01";
+}
+
+::selection {
+  background: var(--track-soft);
+  color: var(--track);
+}
+
+/* thin, unobtrusive scrollbars for long protocol tables */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* visible keyboard focus everywhere — judges tab through forms fast */
+:focus-visible {
+  outline: 2px solid var(--track);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Type utilities                                                         */
+/* ---------------------------------------------------------------------- */
+
+.font-display {
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: 0.01em;
+}
+.font-mono-num {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Use for ANY numeric readout: results, points, sums, ranks, timers.
+   tabular-nums keeps column widths stable during live recalculation. */
+.num {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  letter-spacing: -0.01em;
+}
+
+.eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Surfaces                                                                */
+/* ---------------------------------------------------------------------- */
+
+.card {
+  @apply rounded-2xl backdrop-blur-md;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid var(--border);
+}
+
+.card-flat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.surface-inset {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.track-lane-bg {
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(224, 68, 44, 0.05) 0px,
+    rgba(224, 68, 44, 0.05) 2px,
+    transparent 2px,
+    transparent 130px
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Stadium backdrop — track photo (top-left) + sand-pit photo             */
+/* (bottom-right), blended into each other through a dark diagonal        */
+/* vignette running from the bottom-left corner to the top-right corner.  */
+/* Purely decorative, fixed behind all content (z-index: -2 / -1),        */
+/* pointer-events: none so it never intercepts clicks.                    */
+/* ---------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------- */
+/* Stadium backdrop — работает гарантированно */
+/* ---------------------------------------------------------------------- */
+
+.stadium-photos {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-color: #0B0D12;
+}
+
+/* Первое изображение — foto.jpg */
+.stadium-photos::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 70%;
+  height: 70%;
+  background: 
+    linear-gradient(rgba(11, 13, 18, 0.4), rgba(11, 13, 18, 0.4)),
+    url('/images/foto.jpg');
+  background-size: cover;
+  background-position: top left;
+  background-blend-mode: multiply;
+  border-radius: 0 0 50% 0;
+  opacity: 0.8;
+}
+
+/* Второе изображение — photo.jpg */
+.stadium-photos::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 70%;
+  height: 70%;
+  background: 
+    linear-gradient(rgba(11, 13, 18, 0.4), rgba(11, 13, 18, 0.4)),
+    url('/images/photo.jpg');
+  background-size: cover;
+  background-position: bottom right;
+  background-blend-mode: multiply;
+  border-radius: 50% 0 0 0;
+  opacity: 0.8;
+}
+
+/* Тёмная вуаль поверх всего */
+.stadium-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(11, 13, 18, 0.3) 0%,
+    rgba(11, 13, 18, 0.7) 50%,
+    rgba(11, 13, 18, 0.95) 100%
+  );
+} 
+
+/* ---------------------------------------------------------------------- */
+/* Status chips — result state at a glance (OK / X / pass / DQ / record)  */
+/* ---------------------------------------------------------------------- */
+
+.status-chip {
+  @apply inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide;
+}
+.status-chip--ok      { background: var(--status-ok-soft);     color: var(--status-ok); }
+.status-chip--fail     { background: var(--status-fail-soft);   color: var(--status-fail); }
+.status-chip--pass     { background: var(--status-pass-soft);   color: var(--status-pass); }
+.status-chip--record   { background: var(--status-record-soft); color: var(--status-record); }
+
+.text-status-ok     { color: var(--status-ok); }
+.text-status-fail    { color: var(--status-fail); }
+.text-status-pass    { color: var(--status-pass); }
+.text-status-record  { color: var(--status-record); }
+
+/* "Live now" pulse — used on the currently active event in the timeline */
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--track);
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+
+/* brief flash on a cell/row when a live value updates */
+@keyframes value-flash {
+  0%   { background-color: var(--track-soft); }
+  100% { background-color: transparent; }
+}
+.value-flash {
+  animation: value-flash 900ms ease-out;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  header, nav, button, .print\:hidden {
+    display: none !important;
+  }
+
+  .page-break {
+    page-break-after: always;
+  }
+}
