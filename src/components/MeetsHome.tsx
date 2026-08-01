@@ -5,14 +5,17 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { motion } from "framer-motion";
 import { db } from "@/lib/db";
 import { deleteMeet } from "@/lib/actions";
+import { supabase } from "@/lib/supabaseClient";
 import { useAppStore } from "@/store/useAppStore";
 import MeetSetup from "./MeetSetup";
 import Button from "./ui/Button";
 import { IconFlag, IconPlus } from "./ui/icons";
 
-const OWNER_ID = "local_user";
-
 interface Props {
+  /** Настоящий id авторизованного пользователя (Supabase Auth, auth.uid()) —
+   *  соревнования привязываются к нему, чтобы owner_id проходил по типу
+   *  uuid и по RLS-политике на сервере при синхронизации. */
+  ownerId: string;
   onSelect: (meetId: string) => void;
 }
 
@@ -22,15 +25,15 @@ interface Props {
  * вернуться к любому из них в любой момент, и даём удалить ненужные. Если
  * соревнований ещё нет — сразу открываем форму создания.
  */
-export default function MeetsHome({ onSelect }: Props) {
+export default function MeetsHome({ ownerId, onSelect }: Props) {
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const clearMeetData = useAppStore((s) => s.clearMeetData);
 
   const meets = useLiveQuery(async () => {
-    const rows = await db.meets.where({ ownerId: OWNER_ID }).toArray();
+    const rows = await db.meets.where({ ownerId }).toArray();
     return rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  }, []);
+  }, [ownerId]);
 
   async function handleDelete(id: string, name: string) {
     if (
@@ -63,7 +66,7 @@ export default function MeetsHome({ onSelect }: Props) {
   if (creating || meets.length === 0) {
     return (
       <MeetSetup
-        ownerId={OWNER_ID}
+        ownerId={ownerId}
         onCreated={(id) => {
           setCreating(false);
           onSelect(id);
@@ -79,13 +82,23 @@ export default function MeetsHome({ onSelect }: Props) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
-        <div className="eyebrow text-track mb-1.5 flex items-center gap-1.5">
-          <span className="live-dot" /> С возвращением
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="eyebrow text-track mb-1.5 flex items-center gap-1.5">
+              <span className="live-dot" /> С возвращением
+            </div>
+            <h1 className="font-display text-display-xl tracking-wide">Ваши соревнования</h1>
+            <p className="text-sm text-muted mt-2 max-w-lg">
+              Выберите соревнование, чтобы продолжить работу с протоколами, или создайте новое.
+            </p>
+          </div>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="text-xs font-semibold text-muted hover:text-status-fail transition shrink-0 mt-1"
+          >
+            Выйти
+          </button>
         </div>
-        <h1 className="font-display text-display-xl tracking-wide">Ваши соревнования</h1>
-        <p className="text-sm text-muted mt-2 max-w-lg">
-          Выберите соревнование, чтобы продолжить работу с протоколами, или создайте новое.
-        </p>
       </motion.div>
 
       <Button variant="primary" onClick={() => setCreating(true)} className="w-full !py-3">

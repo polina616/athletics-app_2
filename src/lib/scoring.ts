@@ -87,17 +87,17 @@ export const EVENTS: EventConfig[] = [
 
   // ---------------- метания ----------------
   {
-    key: "grenade300", name: "Толкание гранаты 300 г", cat: "throw",
+    key: "grenade300", name: "Метание гранаты 300 г", cat: "throw",
     unitHint: "метры, напр. 28.40", exponent: 1.05,
     anchors: { м: { elite: 55, base: 20 }, ж: { elite: 40, base: 12 } },
   },
   {
-    key: "grenade500", name: "Толкание гранаты 500 г", cat: "throw",
+    key: "grenade500", name: "Метание гранаты 500 г", cat: "throw",
     unitHint: "метры, напр. 22.10", exponent: 1.05,
     anchors: { м: { elite: 45, base: 15 }, ж: { elite: 32, base: 10 } },
   },
   {
-    key: "grenade700", name: "Толкание гранаты 700 г", cat: "throw",
+    key: "grenade700", name: "Метание гранаты 700 г", cat: "throw",
     unitHint: "метры, напр. 18.00", exponent: 1.05,
     anchors: { м: { elite: 38, base: 12 }, ж: { elite: 26, base: 8 } },
   },
