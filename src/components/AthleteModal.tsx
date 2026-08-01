@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { addAthlete, updateAthlete } from "@/lib/actions";
@@ -35,8 +35,23 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
   const [gender, setGender] = useState<Gender>("м");
   const [ageGroup, setAgeGroup] = useState("");
 
+  // Инициализируем поля формы РОВНО ОДИН РАЗ за сеанс открытия модалки —
+  // не на каждое изменение `meet`/`teams`. useLiveQuery отдаёт новый объект
+  // при любой записи в соответствующую Dexie-таблицу, включая запись,
+  // прилетевшую из фоновой синхронизации от ДРУГОГО судьи (см. sync.ts /
+  // SyncStatus.tsx — фоновый sync каждые 15 сек). Без этой защиты, если
+  // пока один судья печатает ФИО, второй в этот момент правит команду
+  // или соревнование, поле ФИО обнулялось прямо посреди ввода.
+  const initializedRef = useRef(false);
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initializedRef.current = false;
+      return;
+    }
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     if (editingAthlete) {
       setFullName(editingAthlete.fullName);
       setTeamId(editingAthlete.teamId);
@@ -54,7 +69,8 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
       setAgeGroup(rememberedAgeGroupValid ? lastDefaults!.ageGroup : meet?.ageGroups?.[0] ?? "");
       setGender(lastDefaults?.gender ?? "м");
     }
-  }, [editingAthlete, isOpen, meet, teams, lastDefaults]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingAthlete, isOpen]);
 
   if (!isOpen) return null;
 
