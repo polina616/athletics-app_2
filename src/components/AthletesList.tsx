@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { deleteAthlete } from "@/lib/actions";
 import { Athlete } from "@/lib/types";
 import AthleteModal from "./AthleteModal";
+import EmptyState from "./ui/EmptyState";
+import { IconUsers } from "./ui/icons";
 
 export default function AthletesList({ meetId }: { meetId: string }) {
   const [editingAthlete, setEditingAthlete] = useState<Athlete | null>(null);
@@ -27,11 +30,15 @@ export default function AthletesList({ meetId }: { meetId: string }) {
     }
   };
 
-  if (!athletes || athletes.length === 0) {
+  if (!athletes) return <div className="skeleton h-48 rounded-xl2" />;
+
+  if (athletes.length === 0) {
     return (
       <div className="card-flat p-5 rounded-xl">
-        <h3 className="text-lg font-bold mb-2">Список участников</h3>
-        <p className="text-xs text-muted italic">Спортсмены ещё не добавлены.</p>
+        <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
+          <IconUsers className="w-4 h-4 text-track" /> Список участников
+        </h3>
+        <EmptyState title="Спортсмены ещё не добавлены" />
       </div>
     );
   }
@@ -41,7 +48,9 @@ export default function AthletesList({ meetId }: { meetId: string }) {
   return (
     <div className="card-flat p-5 rounded-xl space-y-4">
       <div className="flex items-center justify-between border-b border-white/10 pb-3">
-        <h3 className="text-lg font-bold">Список всех участников</h3>
+        <h3 className="text-lg font-bold flex items-center gap-2">
+          <IconUsers className="w-4 h-4 text-track" /> Список всех участников
+        </h3>
         <span className="text-xs font-bold num bg-blue/10 text-blue px-2.5 py-1 rounded-full">
           Всего: {athletes.length}
         </span>
@@ -49,7 +58,7 @@ export default function AthletesList({ meetId }: { meetId: string }) {
 
       <div className="overflow-x-auto max-h-80 overflow-y-auto">
         <table className="w-full text-left text-xs">
-          <thead className="sticky top-0 bg-[#12151C] border-b border-white/10 text-muted uppercase font-bold text-[10px] tracking-wide">
+          <thead className="sticky top-0 bg-[var(--surface)] border-b border-white/10 text-muted uppercase font-bold text-[10px] tracking-wide">
             <tr>
               <th className="py-2">ФИО</th>
               <th className="py-2">Команда</th>
@@ -58,17 +67,23 @@ export default function AthletesList({ meetId }: { meetId: string }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {sorted.map((a) => (
-              <tr key={a.id} className="group hover:bg-white/[0.04] transition-colors">
+            {sorted.map((a, idx) => (
+              <motion.tr
+                key={a.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2, delay: Math.min(idx * 0.02, 0.3) }}
+                className="group hover:bg-white/[0.04] transition-colors"
+              >
                 <td className="py-2 font-medium">{a.fullName}</td>
-                <td className="py-2 text-[#F2F4F8]/80">{teamName(a.teamId)}</td>
+                <td className="py-2 text-[var(--ink)]/80">{teamName(a.teamId)}</td>
                 <td className="py-2">
                   {a.ageGroup} ({a.gender === "м" ? "Ю" : "Д"})
                 </td>
                 <td className="py-2 text-right space-x-2">
                   <button
                     onClick={() => setEditingAthlete(a)}
-                    className="text-blue hover:text-blue/80 opacity-60 group-hover:opacity-100 font-bold px-1 transition"
+                    className="text-blue hover:text-blue-light opacity-60 group-hover:opacity-100 font-bold px-1 transition"
                     title="Редактировать спортсмена"
                   >
                     ✎
@@ -81,7 +96,7 @@ export default function AthletesList({ meetId }: { meetId: string }) {
                     ✕
                   </button>
                 </td>
-              </tr>
+              </motion.tr>
             ))}
           </tbody>
         </table>

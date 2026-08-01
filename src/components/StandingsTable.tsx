@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/scoring";
 import { teamBreakdowns } from "@/lib/derive";
 import { STATUS_LABELS } from "@/lib/types";
+import AnimatedNumber from "./ui/AnimatedNumber";
+import EmptyState from "./ui/EmptyState";
 
 export default function StandingsTable({ meetId }: { meetId: string }) {
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
@@ -19,7 +22,7 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
     [meetId]
   );
 
-  if (!teams || !entries) return null;
+  if (!teams || !entries) return <div className="skeleton h-48 rounded-xl2" />;
 
   const breakdowns = teamBreakdowns(entries, teams);
 
@@ -30,87 +33,110 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
         <p className="text-xs text-muted">Нажмите на команду для детализации очков</p>
       </div>
 
-      <div className="space-y-2">
-        {breakdowns.map((team, rank) => {
-          const isExpanded = expandedTeam === team.teamId;
+      {breakdowns.length === 0 ? (
+        <EmptyState title="Команды ещё не добавлены" />
+      ) : (
+        <div className="space-y-2">
+          {breakdowns.map((team, rank) => {
+            const isExpanded = expandedTeam === team.teamId;
 
-          return (
-            <div
-              key={team.teamId}
-              className="border border-white/10 rounded-lg overflow-hidden surface-inset transition"
-            >
-              <button
-                onClick={() => setExpandedTeam(isExpanded ? null : team.teamId)}
-                className="w-full flex items-center justify-between p-3 text-left hover:bg-white/[0.04] transition"
+            return (
+              <motion.div
+                layout
+                key={team.teamId}
+                className="border border-white/10 rounded-lg overflow-hidden surface-inset transition"
               >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs num ${
-                      rank === 0
-                        ? "bg-gold text-black"
-                        : rank === 1
-                        ? "bg-white/25 text-black"
-                        : rank === 2
-                        ? "bg-track-dark text-white"
-                        : "bg-white/10 text-[#F2F4F8]"
-                    }`}
-                  >
-                    {rank + 1}
-                  </span>
-                  <span className="font-semibold text-sm">{team.teamName}</span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <span className="num font-bold text-track text-sm">{team.total} очков</span>
-                  <span className="text-xs text-muted">{isExpanded ? "▲" : "▼"}</span>
-                </div>
-              </button>
-
-              {isExpanded && (
-                <div className="p-3 bg-[#12151C] border-t border-white/10 space-y-2 text-xs">
-                  <div className="font-bold text-muted uppercase text-[10px] tracking-wide">
-                    Вклад участников в результат команды:
+                <button
+                  onClick={() => setExpandedTeam(isExpanded ? null : team.teamId)}
+                  className="w-full flex items-center justify-between p-3 text-left hover:bg-white/[0.04] transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs num ${
+                        rank === 0
+                          ? "bg-gold text-black"
+                          : rank === 1
+                          ? "bg-white/25 text-black"
+                          : rank === 2
+                          ? "bg-track-dark text-white"
+                          : "bg-white/10 text-[var(--ink)]"
+                      }`}
+                    >
+                      {rank + 1}
+                    </span>
+                    <span className="font-semibold text-sm">{team.teamName}</span>
                   </div>
 
-                  {team.rows.length === 0 ? (
-                    <p className="text-muted italic">Нет зафиксированных результатов</p>
-                  ) : (
-                    <table className="w-full text-left">
-                      <thead className="text-muted font-bold border-b border-white/5">
-                        <tr>
-                          <th className="py-1">Спортсмен</th>
-                          <th className="py-1">Вид</th>
-                          <th className="py-1">Категория</th>
-                          <th className="py-1">Рез-т</th>
-                          <th className="py-1 text-right">Очки</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {team.rows.map((r, idx) => {
-                          const ev = getEvent(r.eventKey);
-                          const resText = r.status ? STATUS_LABELS[r.status] : r.resultRaw;
+                  <div className="flex items-center gap-3">
+                    <span className="num font-bold text-track text-sm">
+                      <AnimatedNumber value={team.total} /> очков
+                    </span>
+                    <motion.span
+                      animate={{ rotate: isExpanded ? 180 : 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="text-xs text-muted"
+                    >
+                      ▼
+                    </motion.span>
+                  </div>
+                </button>
 
-                          return (
-                            <tr key={idx}>
-                              <td className="py-1.5 font-medium">{r.athleteName}</td>
-                              <td className="py-1.5 text-[#F2F4F8]/80">{ev.name}</td>
-                              <td className="py-1.5 text-[#F2F4F8]/70">
-                                {r.ageGroup} ({r.gender === "м" ? "Ю" : "Д"})
-                              </td>
-                              <td className={`py-1.5 num ${r.status ? "text-status-fail" : ""}`}>{resText}</td>
-                              <td className="py-1.5 text-right font-bold num text-track">+{r.pts}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                <AnimatePresence initial={false}>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-3 bg-[var(--surface)] border-t border-white/10 space-y-2 text-xs">
+                        <div className="font-bold text-muted uppercase text-[10px] tracking-wide">
+                          Вклад участников в результат команды:
+                        </div>
+
+                        {team.rows.length === 0 ? (
+                          <p className="text-muted italic">Нет зафиксированных результатов</p>
+                        ) : (
+                          <table className="w-full text-left">
+                            <thead className="text-muted font-bold border-b border-white/5">
+                              <tr>
+                                <th className="py-1">Спортсмен</th>
+                                <th className="py-1">Вид</th>
+                                <th className="py-1">Категория</th>
+                                <th className="py-1">Рез-т</th>
+                                <th className="py-1 text-right">Очки</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                              {team.rows.map((r, idx) => {
+                                const ev = getEvent(r.eventKey);
+                                const resText = r.status ? STATUS_LABELS[r.status] : r.resultRaw;
+
+                                return (
+                                  <tr key={idx}>
+                                    <td className="py-1.5 font-medium">{r.athleteName}</td>
+                                    <td className="py-1.5 text-[var(--ink)]/80">{ev.name}</td>
+                                    <td className="py-1.5 text-[var(--ink)]/70">
+                                      {r.ageGroup} ({r.gender === "м" ? "Ю" : "Д"})
+                                    </td>
+                                    <td className={`py-1.5 num ${r.status ? "text-status-fail" : ""}`}>{resText}</td>
+                                    <td className="py-1.5 text-right font-bold num text-track">+{r.pts}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </motion.div>
                   )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                </AnimatePresence>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

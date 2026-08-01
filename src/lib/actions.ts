@@ -1,5 +1,6 @@
 import { v4 as uuid } from "uuid";
 import { db } from "./db";
+import { supabase } from "./supabaseClient";
 import { fullSync } from "./sync";
 import { AgeGroup, Athlete, Entry, EventEligibility, Gender, Meet, ResultStatus, Team } from "./types";
 import { computeAutoPoints, getEvent, parseResult } from "./scoring";
@@ -37,6 +38,28 @@ export async function createMeet(
   await db.meets.put(meet);
   kickSync(meet.id);
   return meet;
+}
+
+/** Полностью удаляет соревнование: сначала локально (Dexie) — команды,
+ *  спортсменов, результаты и сам Meet, чтобы список на главном экране
+ *  обновился мгновенно и офлайн. Затем — best-effort удаление в Supabase;
+ *  там настроен "on delete cascade", так что достаточно удалить только
+ *  строку meets, остальное подчистится на сервере само. Если сети нет —
+ *  просто не получится, ничего страшного: локально запись уже удалена. */
+export async function deleteMeet(meetId: string): Promise<void> {
+  await db.transaction("rw", db.meets, db.teams, db.athletes, db.entries, async () => {
+    await db.entries.where({ meetId }).delete();
+    await db.athletes.where({ meetId }).delete();
+    await db.teams.where({ meetId }).delete();
+    await db.meets.delete(meetId);
+  });
+
+  try {
+    const { error } = await supabase.from("meets").delete().eq("id", meetId);
+    if (error) throw error;
+  } catch (err) {
+    console.warn("[actions] remote meet delete failed (offline or network error) — local copy is already gone", err);
+  }
 }
 
 export async function addTeam(meetId: string, name: string): Promise<Team> {

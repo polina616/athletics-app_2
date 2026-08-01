@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { createMeet, addTeamsBulk } from "@/lib/actions";
 import { EVENT_GROUPS } from "@/lib/scoring";
 import { EventEligibility, Gender } from "@/lib/types";
+import Button from "./ui/Button";
+import { IconJump, IconRunning, IconShooting, IconThrow } from "./ui/icons";
+import ParallaxHero from "./ui/Parallaxhero";
 
 interface Props {
   ownerId: string;
@@ -11,6 +15,13 @@ interface Props {
 }
 
 type EligibilityDraft = Record<string, { ageGroups: string[]; genders: Gender[] }>;
+
+const groupIcon: Record<string, (props: any) => JSX.Element> = {
+  "Бег": IconRunning,
+  "Прыжки": IconJump,
+  "Метания": IconThrow,
+  "Стрельба": IconShooting,
+};
 
 export default function MeetSetup({ ownerId, onCreated }: Props) {
   const [name, setName] = useState("");
@@ -87,166 +98,164 @@ export default function MeetSetup({ ownerId, onCreated }: Props) {
     if (onCreated) onCreated(meet.id);
   }
 
+  const selectedCount = Object.keys(eligibility).length;
+
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
-      <div>
-        <div className="eyebrow text-track mb-1.5">Новый протокол</div>
-        <h1 className="font-display text-4xl tracking-wide">Новое соревнование</h1>
-      </div>
-      <form
+    <ParallaxHero
+      eyebrow="Новый протокол"
+      title="Новое соревнование"
+      subtitle="Задайте команды, возрастные группы и дисциплины один раз — дальше судейская коллегия вносит только результаты."
+    />
+
+      <motion.form
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
         onSubmit={handleCreate}
-        className="space-y-5 rounded-xl border border-white/10 p-6 bg-[#12151C] shadow-card"
+        className="space-y-5 card-flat p-6"
       >
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-wide text-muted mb-1">Название соревнования</label>
+          <label className="field-label">Название соревнования</label>
           <input
             type="text"
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Первенство области по лёгкой атлетике"
-            className="w-full bg-[#171B24] border border-white/10 rounded-lg p-3 text-sm text-[#F2F4F8] outline-none focus:border-track transition"
+            className="field"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wide text-muted mb-1">Дата</label>
-            <input
-              type="date"
-              required
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full bg-[#171B24] border border-white/10 rounded-lg p-3 text-sm num text-[#F2F4F8] outline-none focus:border-track transition"
-            />
+            <label className="field-label">Дата</label>
+            <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className="field num" />
           </div>
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wide text-muted mb-1">Место проведения</label>
+            <label className="field-label">Место проведения</label>
             <input
               type="text"
               value={place}
               onChange={(e) => setPlace(e.target.value)}
               placeholder="Стадион 'Олимпиец'"
-              className="w-full bg-[#171B24] border border-white/10 rounded-lg p-3 text-sm text-[#F2F4F8] outline-none focus:border-track transition"
+              className="field"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-wide text-muted mb-1">
-            Возрастные группы (по одной на строку)
-          </label>
-          <textarea
-            rows={3}
-            value={ageGroupsText}
-            onChange={(e) => setAgeGroupsText(e.target.value)}
-            className="w-full bg-[#171B24] border border-white/10 rounded-lg p-3 text-sm num text-[#F2F4F8] outline-none focus:border-track transition"
-          />
+          <label className="field-label">Возрастные группы (по одной на строку)</label>
+          <textarea rows={3} value={ageGroupsText} onChange={(e) => setAgeGroupsText(e.target.value)} className="field num" />
         </div>
 
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-wide text-muted mb-1">
-            Заявленные команды (по одной на строку)
-          </label>
-          <textarea
-            rows={3}
-            value={teamsText}
-            onChange={(e) => setTeamsText(e.target.value)}
-            className="w-full bg-[#171B24] border border-white/10 rounded-lg p-3 text-sm num text-[#F2F4F8] outline-none focus:border-track transition"
-          />
+          <label className="field-label">Заявленные команды (по одной на строку)</label>
+          <textarea rows={3} value={teamsText} onChange={(e) => setTeamsText(e.target.value)} className="field num" />
         </div>
 
         <div className="space-y-4">
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wide text-muted">
-              Дисциплины соревнования — и кто в них допущен
-            </label>
-            <p className="text-[11px] text-muted mt-0.5">
-              Отметьте дисциплину, затем укажите для неё пол и возрастные группы. При заполнении
-              результатов список спортсменов будет отфильтрован именно по этим условиям.
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="field-label !mb-1">Дисциплины соревнования — и кто в них допущен</label>
+              <p className="text-[11px] text-muted">
+                Отметьте дисциплину, затем укажите для неё пол и возрастные группы.
+              </p>
+            </div>
+            {selectedCount > 0 && (
+              <span className="text-xs font-bold num bg-track/10 text-track px-2.5 py-1 rounded-full shrink-0">
+                Выбрано: {selectedCount}
+              </span>
+            )}
           </div>
 
-          {EVENT_GROUPS.map((group) => (
-            <div key={group.label} className="space-y-2">
-              <div className="eyebrow">{group.label}</div>
-              <div className="space-y-2">
-                {group.events.map((ev) => {
-                  const active = !!eligibility[ev.key];
-                  return (
-                    <div
-                      key={ev.key}
-                      className={`rounded-lg border p-3 text-xs transition ${
-                        active
-                          ? "border-track/60 bg-track/5"
-                          : "border-white/10 text-[#F2F4F8]/60"
-                      }`}
-                    >
-                      <label className="flex items-center gap-2 cursor-pointer font-bold mb-2">
-                        <input
-                          type="checkbox"
-                          checked={active}
-                          onChange={() => toggleDiscipline(ev.key)}
-                          className="accent-track"
-                        />
-                        {ev.name}
-                      </label>
+          {EVENT_GROUPS.map((group) => {
+            const GroupIcon = groupIcon[group.label] ?? IconRunning;
+            return (
+              <div key={group.label} className="space-y-2">
+                <div className="eyebrow flex items-center gap-1.5">
+                  <GroupIcon className="w-3.5 h-3.5" />
+                  {group.label}
+                </div>
+                <div className="space-y-2">
+                  {group.events.map((ev) => {
+                    const active = !!eligibility[ev.key];
+                    return (
+                      <motion.div
+                        key={ev.key}
+                        layout
+                        className={`rounded-lg border p-3 text-xs transition ${
+                          active ? "border-track/60 bg-track/5" : "border-white/10 text-[var(--ink)]/60"
+                        }`}
+                      >
+                        <label className="flex items-center gap-2 cursor-pointer font-bold mb-2">
+                          <input
+                            type="checkbox"
+                            checked={active}
+                            onChange={() => toggleDiscipline(ev.key)}
+                            className="accent-track"
+                          />
+                          {ev.name}
+                        </label>
 
-                      {active && (
-                        <div className="pl-6 space-y-2">
-                          <div className="flex gap-3">
-                            {(["м", "ж"] as Gender[]).map((g) => (
-                              <label key={g} className="flex items-center gap-1 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={eligibility[ev.key].genders.includes(g)}
-                                  onChange={() => toggleGenderForEvent(ev.key, g)}
-                                  className="accent-track"
-                                />
-                                {g === "м" ? "Юноши" : "Девушки"}
-                              </label>
-                            ))}
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {ageGroups.map((ag) => {
-                              const checked = eligibility[ev.key].ageGroups.includes(ag);
-                              return (
-                                <label
-                                  key={ag}
-                                  className={`px-2 py-1 rounded border cursor-pointer num transition ${
-                                    checked
-                                      ? "bg-track text-white border-track"
-                                      : "border-white/10 text-[#F2F4F8]/70 hover:border-white/20"
-                                  }`}
-                                >
+                        {active && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            transition={{ duration: 0.2 }}
+                            className="pl-6 space-y-2"
+                          >
+                            <div className="flex gap-3">
+                              {(["м", "ж"] as Gender[]).map((g) => (
+                                <label key={g} className="flex items-center gap-1 cursor-pointer">
                                   <input
                                     type="checkbox"
-                                    className="hidden"
-                                    checked={checked}
-                                    onChange={() => toggleAgeGroupForEvent(ev.key, ag)}
+                                    checked={eligibility[ev.key].genders.includes(g)}
+                                    onChange={() => toggleGenderForEvent(ev.key, g)}
+                                    className="accent-track"
                                   />
-                                  {ag}
+                                  {g === "м" ? "Юноши" : "Девушки"}
                                 </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                              ))}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {ageGroups.map((ag) => {
+                                const checked = eligibility[ev.key].ageGroups.includes(ag);
+                                return (
+                                  <label
+                                    key={ag}
+                                    className={`px-2 py-1 rounded border cursor-pointer num transition ${
+                                      checked
+                                        ? "bg-track text-white border-track"
+                                        : "border-white/10 text-[var(--ink)]/70 hover:border-white/20"
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="hidden"
+                                      checked={checked}
+                                      onChange={() => toggleAgeGroupForEvent(ev.key, ag)}
+                                    />
+                                    {ag}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        <button
-          type="submit"
-          className="w-full bg-track hover:bg-track-dark text-white font-bold rounded-lg py-3.5 text-sm transition shadow-card"
-        >
+        <Button variant="primary" type="submit" className="w-full !py-3.5 !text-sm">
           Создать соревнование
-        </button>
-      </form>
+        </Button>
+      </motion.form>
     </div>
   );
 }

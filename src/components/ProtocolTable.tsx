@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { getEvent, formatSeconds } from "@/lib/scoring";
@@ -8,6 +9,18 @@ import { protocolRows } from "@/lib/derive";
 import { useAppStore } from "@/store/useAppStore";
 import { Entry, Gender, STATUS_LABELS } from "@/lib/types";
 import EditResultModal from "./EditResultModal";
+import EmptyState from "./ui/EmptyState";
+import Button from "./ui/Button";
+import { IconPlus } from "./ui/icons";
+
+const medalClass = (place: number) =>
+  place === 1
+    ? "bg-gold text-black"
+    : place === 2
+    ? "bg-white/25 text-black"
+    : place === 3
+    ? "bg-track-dark text-white"
+    : "bg-white/10 text-[var(--ink)]";
 
 export default function ProtocolTable({ meetId, eventKey }: { meetId: string; eventKey: string }) {
   const openResultModal = useAppStore((s) => s.openResultModal);
@@ -22,7 +35,7 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
 
   const handlePrint = () => window.print();
 
-  if (!meet || !entries) return null;
+  if (!meet || !entries) return <div className="skeleton h-48 rounded-xl2" />;
 
   const eligibility = meet.eventEligibility.find((el) => el.eventKey === eventKey);
   const ageGroups = eligibility?.ageGroups.length ? eligibility.ageGroups : meet.ageGroups;
@@ -45,23 +58,17 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
         </div>
 
         <div className="flex items-center gap-2 print:hidden">
-          <button
-            onClick={handlePrint}
-            className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-[#F2F4F8] rounded-lg text-xs font-bold transition flex items-center gap-1.5"
-          >
+          <Button variant="secondary" onClick={handlePrint}>
             🖨 Печать / PDF
-          </button>
-          <button
-            onClick={() => openResultModal(eventKey)}
-            className="px-3 py-1.5 bg-track hover:bg-track-dark text-white rounded-lg text-xs font-bold transition shadow-card"
-          >
-            + Ввести результат
-          </button>
+          </Button>
+          <Button variant="primary" onClick={() => openResultModal(eventKey)}>
+            <IconPlus className="w-4 h-4" /> Ввести результат
+          </Button>
         </div>
       </div>
 
       {!hasAnyResults ? (
-        <p className="text-sm text-muted italic">Результатов пока нет</p>
+        <EmptyState title="Результатов пока нет" description="Внесите первый результат по этой дисциплине." />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-1 gap-6">
           {categoryTables.map(({ ag, g, rows }) => {
@@ -87,7 +94,7 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {rows.map(({ entry, pts, place }) => {
+                    {rows.map(({ entry, pts, place }, idx) => {
                       const isOK = !entry.status;
                       const resText = isOK
                         ? eventConfig.cat === "track"
@@ -96,11 +103,26 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
                         : STATUS_LABELS[entry.status!];
 
                       return (
-                        <tr
+                        <motion.tr
                           key={entry.id}
+                          initial={{ opacity: 0, x: -6 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.25, delay: Math.min(idx * 0.03, 0.3) }}
                           className="group hover:bg-white/[0.04] print:hover:bg-transparent transition-colors"
                         >
-                          <td className="py-1.5 font-bold num text-muted print:text-black">{place ?? "—"}</td>
+                          <td className="py-1.5 font-bold num text-muted print:text-black">
+                            {place ? (
+                              <span
+                                className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold print:bg-transparent ${medalClass(
+                                  place
+                                )}`}
+                              >
+                                {place}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
                           <td className="py-1.5 font-medium">{entry.athleteName}</td>
                           <td
                             className={`py-1.5 num font-bold ${
@@ -119,7 +141,7 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
                               ✎
                             </button>
                           </td>
-                        </tr>
+                        </motion.tr>
                       );
                     })}
                   </tbody>

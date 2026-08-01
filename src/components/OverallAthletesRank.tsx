@@ -1,8 +1,11 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { pointsForEntry } from "@/lib/derive";
+import EmptyState from "./ui/EmptyState";
+import { IconMedal } from "./ui/icons";
 
 interface AthleteScore {
   athleteId: string;
@@ -29,19 +32,20 @@ export default function OverallAthletesRank({ meetId }: { meetId: string }) {
   );
 
   if (!entries || !athletes || !teams) {
-    return (
-      <div className="card-flat p-5 rounded-xl">
-        <h3 className="text-lg font-bold mb-2">Общий личный зачёт (Многоборье)</h3>
-        <p className="text-xs text-muted italic">Загрузка...</p>
-      </div>
-    );
+    return <div className="skeleton h-40 rounded-xl2" />;
   }
+
+  const header = (
+    <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
+      <IconMedal className="w-4 h-4 text-gold" /> Общий личный зачёт (Многоборье)
+    </h3>
+  );
 
   if (entries.length === 0) {
     return (
       <div className="card-flat p-5 rounded-xl">
-        <h3 className="text-lg font-bold mb-2">Общий личный зачёт (Многоборье)</h3>
-        <p className="text-xs text-muted italic">Результатов пока нет</p>
+        {header}
+        <EmptyState title="Результатов пока нет" />
       </div>
     );
   }
@@ -94,15 +98,21 @@ export default function OverallAthletesRank({ meetId }: { meetId: string }) {
   return (
     <div className="card-flat p-5 rounded-xl space-y-6">
       <div className="border-b border-white/10 pb-3">
-        <h3 className="text-xl font-display tracking-wide">Личный зачёт (Сумма по всем видам)</h3>
+        <h3 className="text-xl font-display tracking-wide flex items-center gap-2">
+          <IconMedal className="w-5 h-5 text-gold" /> Личный зачёт (Сумма по всем видам)
+        </h3>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {Object.entries(categoryRanks).map(([catTitle, athletesList]) => (
-          <div key={catTitle} className="border border-white/10 rounded-lg p-3 surface-inset space-y-2">
-            <div className="eyebrow text-blue border-b border-white/10 pb-1.5">
-              Категория: {catTitle}
-            </div>
+        {Object.entries(categoryRanks).map(([catTitle, athletesList], catIdx) => (
+          <motion.div
+            key={catTitle}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: catIdx * 0.05 }}
+            className="border border-white/10 rounded-lg p-3 surface-inset space-y-2"
+          >
+            <div className="eyebrow text-blue border-b border-white/10 pb-1.5">Категория: {catTitle}</div>
 
             <table className="w-full text-left text-xs">
               <thead className="text-muted font-bold border-b border-white/10 text-[10px] uppercase tracking-wide">
@@ -121,15 +131,13 @@ export default function OverallAthletesRank({ meetId }: { meetId: string }) {
                       <div>{ath.fullName}</div>
                       <div className="text-[10px] text-muted">{ath.teamName}</div>
                     </td>
-                    <td className="py-2 text-center num text-[#F2F4F8]/70">{ath.eventsCount}</td>
-                    <td className="py-2 text-right font-bold num text-track">
-                      {ath.totalPoints}
-                    </td>
+                    <td className="py-2 text-center num text-[var(--ink)]/70">{ath.eventsCount}</td>
+                    <td className="py-2 text-right font-bold num text-track">{ath.totalPoints}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>

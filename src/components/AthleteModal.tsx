@@ -5,6 +5,9 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { addAthlete, updateAthlete } from "@/lib/actions";
 import { Athlete, Gender } from "@/lib/types";
+import { useAppStore } from "@/store/useAppStore";
+import Modal from "./ui/Modal";
+import Button from "./ui/Button";
 
 interface Props {
   meetId: string;
@@ -21,6 +24,12 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
     [meetId]
   );
 
+  // Последние выбранные команда/возраст/пол для ЭТОГО соревнования — судья
+  // обычно регистрирует несколько спортсменов подряд из одной команды и
+  // категории, так что не нужно каждый раз выбирать заново.
+  const lastDefaults = useAppStore((s) => s.lastAthleteDefaults[meetId]);
+  const setLastAthleteDefaults = useAppStore((s) => s.setLastAthleteDefaults);
+
   const [fullName, setFullName] = useState("");
   const [teamId, setTeamId] = useState("");
   const [gender, setGender] = useState<Gender>("м");
@@ -35,36 +44,37 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
       setAgeGroup(editingAthlete.ageGroup);
     } else {
       setFullName("");
-      setGender("м");
-      setAgeGroup(meet?.ageGroups?.[0] ?? "");
-      setTeamId(teams?.[0]?.id ?? "");
-    }
-  }, [editingAthlete, isOpen, meet, teams]);
 
-  // Если данные ещё загружаются или модалка закрыта
+      // Берём запомненное значение, только если оно всё ещё существует в
+      // текущем составе команд/возрастных групп (их могли удалить/менять).
+      const rememberedTeamValid = lastDefaults && teams?.some((t) => t.id === lastDefaults.teamId);
+      const rememberedAgeGroupValid = lastDefaults && meet?.ageGroups?.includes(lastDefaults.ageGroup);
+
+      setTeamId(rememberedTeamValid ? lastDefaults!.teamId : teams?.[0]?.id ?? "");
+      setAgeGroup(rememberedAgeGroupValid ? lastDefaults!.ageGroup : meet?.ageGroups?.[0] ?? "");
+      setGender(lastDefaults?.gender ?? "м");
+    }
+  }, [editingAthlete, isOpen, meet, teams, lastDefaults]);
+
   if (!isOpen) return null;
-  
-  // Если meet ещё не загружен — показываем индикатор загрузки
+
   if (!meet) {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-[#12151C] rounded-xl max-w-md w-full p-6 text-center border border-white/10">
-          <p className="text-sm text-muted">Загрузка...</p>
-        </div>
-      </div>
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <p className="text-sm text-muted text-center py-6">Загрузка...</p>
+      </Modal>
     );
   }
 
-  // teams может быть undefined во время загрузки
   const teamsList = teams ?? [];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!fullName.trim()) return;
-    
+
     const finalTeamId = teamId || teamsList[0]?.id;
     const finalAgeGroup = ageGroup || meet?.ageGroups?.[0];
-    
+
     if (!finalTeamId) {
       alert("Добавьте хотя бы одну команду перед регистрацией спортсмена.");
       return;
@@ -83,6 +93,8 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
       });
     } else {
       await addAthlete(meetId, finalTeamId, fullName.trim(), finalAgeGroup, gender);
+      // Запоминаем выбор для следующей регистрации в рамках этого соревнования.
+      setLastAthleteDefaults(meetId, { teamId: finalTeamId, ageGroup: finalAgeGroup, gender });
     }
 
     onClose();
@@ -90,104 +102,89 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
 
   if (teamsList.length === 0) {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-[#12151C] rounded-xl max-w-md w-full p-6 space-y-4 border border-white/10 shadow-card">
-          <h2 className="font-display text-xl tracking-wide">
-            {editingAthlete ? "Редактировать спортсмена" : "Зарегистрировать спортсмена"}
-          </h2>
-          <p className="text-sm text-gold">
-            Сначала добавьте хотя бы одну команду при создании соревнования.
-          </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-semibold border border-white/10 text-[#F2F4F8] hover:bg-white/5 transition"
-          >
-            Закрыть
-          </button>
-        </div>
-      </div>
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <h2 className="font-display text-xl tracking-wide">
+          {editingAthlete ? "Редактировать спортсмена" : "Зарегистрировать спортсмена"}
+        </h2>
+        <p className="text-sm text-gold">
+          Сначала добавьте хотя бы одну команду при создании соревнования.
+        </p>
+        <Button variant="secondary" type="button" onClick={onClose}>
+          Закрыть
+        </Button>
+      </Modal>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#12151C] rounded-xl max-w-md w-full p-6 space-y-4 border border-white/10 shadow-card">
-        <h2 className="font-display text-xl tracking-wide">
-          {editingAthlete ? "Редактировать спортсмена" : "Зарегистрировать спортсмена"}
-        </h2>
+    <Modal isOpen={isOpen} onClose={onClose}>
+      <h2 className="font-display text-xl tracking-wide">
+        {editingAthlete ? "Редактировать спортсмена" : "Зарегистрировать спортсмена"}
+      </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="field-label">ФИО Спортсмена</label>
+          <input
+            type="text"
+            required
+            placeholder="Иванов Иван"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="field"
+            autoFocus
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wide text-muted mb-1">ФИО Спортсмена</label>
-            <input
-              type="text"
-              required
-              placeholder="Иванов Иван"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full bg-[#171B24] border border-white/10 rounded-lg p-2.5 text-sm text-[#F2F4F8] outline-none focus:border-track transition"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wide text-muted mb-1">Команда</label>
-              <select
-                value={teamId || teamsList[0]?.id || ""}
-                onChange={(e) => setTeamId(e.target.value)}
-                className="w-full bg-[#171B24] border border-white/10 rounded-lg p-2.5 text-sm text-[#F2F4F8] outline-none focus:border-track transition"
-              >
-                {teamsList.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wide text-muted mb-1">Возрастная группа</label>
-              <select
-                value={ageGroup || meet.ageGroups?.[0] || ""}
-                onChange={(e) => setAgeGroup(e.target.value)}
-                className="w-full bg-[#171B24] border border-white/10 rounded-lg p-2.5 text-sm text-[#F2F4F8] outline-none focus:border-track transition"
-              >
-                {meet.ageGroups?.map((ag) => (
-                  <option key={ag} value={ag}>
-                    {ag}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wide text-muted mb-1">Пол</label>
+            <label className="field-label">Команда</label>
             <select
-              value={gender}
-              onChange={(e) => setGender(e.target.value as Gender)}
-              className="w-full bg-[#171B24] border border-white/10 rounded-lg p-2.5 text-sm text-[#F2F4F8] outline-none focus:border-track transition"
+              value={teamId || teamsList[0]?.id || ""}
+              onChange={(e) => setTeamId(e.target.value)}
+              className="field"
             >
-              <option value="м">Юноши (м)</option>
-              <option value="ж">Девушки (ж)</option>
+              {teamsList.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
             </select>
           </div>
 
-          <div className="flex justify-end gap-2 pt-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm font-semibold border border-white/10 text-[#F2F4F8] hover:bg-white/5 transition"
+          <div>
+            <label className="field-label">Возрастная группа</label>
+            <select
+              value={ageGroup || meet.ageGroups?.[0] || ""}
+              onChange={(e) => setAgeGroup(e.target.value)}
+              className="field"
             >
-              Отмена
-            </button>
-            <button type="submit" className="px-4 py-2 rounded-lg text-sm bg-track hover:bg-track-dark text-white font-bold transition">
-              Сохранить
-            </button>
+              {meet.ageGroups?.map((ag) => (
+                <option key={ag} value={ag}>
+                  {ag}
+                </option>
+              ))}
+            </select>
           </div>
-        </form>
-      </div>
-    </div>
+        </div>
+
+        <div>
+          <label className="field-label">Пол</label>
+          <select value={gender} onChange={(e) => setGender(e.target.value as Gender)} className="field">
+            <option value="м">Юноши (м)</option>
+            <option value="ж">Девушки (ж)</option>
+          </select>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-3">
+          <Button variant="secondary" type="button" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button variant="primary" type="submit">
+            Сохранить
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

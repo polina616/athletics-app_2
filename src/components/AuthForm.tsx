@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
+import Button from "./ui/Button";
 
 export default function AuthForm() {
   const [email, setEmail] = useState("");
@@ -43,17 +45,22 @@ export default function AuthForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 bg-[#0B0D12]">
-      <div className="card-flat p-8 max-w-sm w-full shadow-card">
-        <div className="eyebrow text-track mb-2">
-          Вход судьи
+    <div className="min-h-screen flex items-center justify-center px-6">
+      <motion.div
+        initial={{ opacity: 0, y: 16, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="card-flat p-8 max-w-sm w-full shadow-card-lg"
+      >
+        <div className="eyebrow text-track mb-2 flex items-center gap-1.5">
+          <span className="live-dot" /> Вход судьи
         </div>
-        <h1 className="font-display text-4xl tracking-wide mb-4">Athletics // Protocol</h1>
+        <h1 className="font-display text-display-lg tracking-wide mb-4">Athletics // Protocol</h1>
         {sent ? (
-          <p className="text-sm text-muted">
-            Ссылка для входа отправлена на <b className="text-[#F2F4F8]">{email}</b>. Откройте её на этом
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-muted">
+            Ссылка для входа отправлена на <b className="text-[var(--ink)]">{email}</b>. Откройте её на этом
             устройстве, чтобы продолжить.
-          </p>
+          </motion.p>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
             <input
@@ -62,19 +69,19 @@ export default function AuthForm() {
               placeholder="judge@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-[#171B24] border border-white/10 rounded-lg px-3 py-3 text-sm text-[#F2F4F8] outline-none focus:border-track transition"
+              className="field !py-3"
             />
-            {error && <p className="text-xs text-status-fail">{error}</p>}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-track hover:bg-track-dark text-white font-bold rounded-lg py-3 text-sm transition disabled:opacity-50 shadow-card"
-            >
+            {error && (
+              <motion.p initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} className="text-xs text-status-fail">
+                {error}
+              </motion.p>
+            )}
+            <Button variant="primary" type="submit" disabled={loading} className="w-full !py-3">
               {loading ? "Отправка..." : "Получить ссылку для входа"}
-            </button>
+            </Button>
           </form>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

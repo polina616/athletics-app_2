@@ -1,25 +1,30 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ==========================================================================
-   Design tokens — Athletics Meet Protocol
-   Dark-first data UI for judges/secretariat working long shifts under
-   stadium lighting. Terracotta = "live / primary action", signal blue =
-   "secondary / analytical", gold = "record / medal". All numeric data
-   (results, points, ranks, sums) renders in tabular-nums monospace so
-   figures never shift width on live recalculation.
+   DESIGN SYSTEM — Athletics Meet Protocol
+   "Timing board" direction: dark graphite control-room surfaces, results
+   rendered like an official F1 / World Athletics photo-finish board. One
+   accent does the talking at a time — terracotta red = live/primary,
+   signal blue = analytical, gold = record/medal. Nothing else competes.
+
+   Tokens below are the single source of truth — components should reach
+   for var(--*) / Tailwind classes derived from them, never hardcode hex.
    ========================================================================== */
 
 :root {
   /* accents */
   --track: #E0442C;
   --track-dark: #B8341F;
+  --track-light: #FF6A4D;
   --track-soft: rgba(224, 68, 44, 0.14);
   --gold: #C9971F;
+  --gold-light: #E9BE4E;
   --gold-soft: rgba(201, 151, 31, 0.16);
   --blue: #1E4FCB;
+  --blue-light: #5B8CFF;
   --blue-soft: rgba(30, 79, 203, 0.14);
 
   /* status */
@@ -32,7 +37,13 @@
   --status-record: #C9971F;
   --status-record-soft: rgba(201, 151, 31, 0.16);
 
-  /* surfaces — light mode (fallback) */
+  /* spacing / radius / motion — single source for the 8pt grid & easing */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --ease-swift: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* surfaces — light mode (fallback, app ships dark-first) */
   --bg: #F0F2F6;
   --surface: #FFFFFF;
   --surface-2: #F4F5F8;
@@ -43,9 +54,10 @@
 }
 
 .dark {
-  --bg: #0B0D12;
+  --bg: #0A0C10;
   --surface: #12151C;
   --surface-2: #171B24;
+  --surface-3: #1B1F29;
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.16);
   --ink: #F2F4F8;
@@ -65,11 +77,12 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
   background: var(--track-soft);
-  color: var(--track);
+  color: var(--track-light);
 }
 
 /* thin, unobtrusive scrollbars for long protocol tables */
@@ -77,17 +90,9 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
 }
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-*::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 999px;
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+*::-webkit-scrollbar-track { background: transparent; }
 
 /* visible keyboard focus everywhere — judges tab through forms fast */
 :focus-visible {
@@ -111,11 +116,9 @@ body {
 
 .font-display {
   font-family: 'Bebas Neue', sans-serif;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
 }
-.font-mono-num {
-  font-family: 'JetBrains Mono', monospace;
-}
+.font-mono-num { font-family: 'JetBrains Mono', monospace; }
 
 /* Use for ANY numeric readout: results, points, sums, ranks, timers.
    tabular-nums keeps column widths stable during live recalculation. */
@@ -129,31 +132,44 @@ body {
 .eyebrow {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--muted);
 }
 
 /* ---------------------------------------------------------------------- */
-/* Surfaces                                                                */
+/* Surfaces — glassmorphism card system                                   */
 /* ---------------------------------------------------------------------- */
 
 .card {
-  @apply rounded-2xl backdrop-blur-md;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
   border: 1px solid var(--border);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px -12px rgba(0,0,0,0.5);
 }
 
 .card-flat {
+  border-radius: var(--radius-lg);
   background: var(--surface);
   border: 1px solid var(--border);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px -14px rgba(0,0,0,0.5);
 }
 
 .surface-inset {
   background: var(--surface-2);
   border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
 
+.surface-raised {
+  background: var(--surface-3, var(--surface-2));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+/* thin repeating "lane" texture, used sparingly behind protocol tables */
 .track-lane-bg {
   background-image: repeating-linear-gradient(
     90deg,
@@ -165,62 +181,63 @@ body {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Stadium backdrop — track photo (top-left) + sand-pit photo             */
-/* (bottom-right), blended into each other through a dark diagonal        */
-/* vignette running from the bottom-left corner to the top-right corner.  */
-/* Purely decorative, fixed behind all content (z-index: -2 / -1),        */
-/* pointer-events: none so it never intercepts clicks.                    */
+/* Global backdrop — the real track photo, treated like premium product   */
+/* photography (Apple/Vercel hero style): slow Ken Burns drift, deep      */
+/* duotone/dark grade so UI text stays legible, film grain, vignette.     */
+/* Fixed behind all content, pointer-events: none.                       */
 /* ---------------------------------------------------------------------- */
 
-/* ---------------------------------------------------------------------- */
-/* Stadium backdrop — работает гарантированно */
-/* ---------------------------------------------------------------------- */
+@keyframes ken-burns {
+  0%   { transform: scale(1.02) translate3d(0, 0, 0); }
+  100% { transform: scale(1.12) translate3d(-0.8%, -0.6%, 0); }
+}
 
 .stadium-photos {
   position: fixed;
   inset: 0;
-  z-index: -2;
+  z-index: -3;
   pointer-events: none;
-  background-color: #0B0D12;
+  overflow: hidden;
+  background-color: #0A0C10;
 }
 
-/* Первое изображение — foto.jpg */
-.stadium-photos::before {
-  content: "";
+.stadium-photos__img {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 70%;
-  height: 70%;
-  background: 
-    linear-gradient(rgba(11, 13, 18, 0.4), rgba(11, 13, 18, 0.4)),
-    url('/images/foto.jpg');
+  inset: -4%;
+  background-image: url('/images/track-hero.jpg');
   background-size: cover;
-  background-position: top left;
-  background-blend-mode: multiply;
-  border-radius: 0 0 50% 0;
-  opacity: 0.8;
+  background-position: center 62%;
+  filter: saturate(1.15) contrast(1.05) brightness(0.62);
+  animation: ken-burns 26s var(--ease-swift) infinite alternate;
+  opacity: 0.9;
 }
 
-/* Второе изображение — photo.jpg */
-.stadium-photos::after {
-  content: "";
+/* colour-grade the photo toward the brand duotone instead of leaving it   */
+/* neutral — this is what keeps a photographic bg from feeling generic.    */
+.stadium-photos__grade {
   position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 70%;
-  height: 70%;
-  background: 
-    linear-gradient(rgba(11, 13, 18, 0.4), rgba(11, 13, 18, 0.4)),
-    url('/images/photo.jpg');
-  background-size: cover;
-  background-position: bottom right;
-  background-blend-mode: multiply;
-  border-radius: 50% 0 0 0;
-  opacity: 0.8;
+  inset: 0;
+  background:
+    linear-gradient(115deg, rgba(224, 68, 44, 0.22), transparent 45%),
+    linear-gradient(300deg, rgba(30, 79, 203, 0.28), transparent 50%);
+  mix-blend-mode: color;
 }
 
-/* Тёмная вуаль поверх всего */
+.stadium-photos__fade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(10,12,16,0.55) 0%, rgba(10,12,16,0.86) 62%, #0A0C10 100%),
+    linear-gradient(90deg, rgba(10,12,16,0.65), transparent 30%, transparent 70%, rgba(10,12,16,0.65));
+}
+
+.stadium-photos__grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+}
+
 .stadium-vignette {
   position: fixed;
   inset: 0;
@@ -228,18 +245,52 @@ body {
   pointer-events: none;
   background: radial-gradient(
     ellipse at center,
-    rgba(11, 13, 18, 0.3) 0%,
-    rgba(11, 13, 18, 0.7) 50%,
-    rgba(11, 13, 18, 0.95) 100%
+    rgba(10, 12, 16, 0.1) 0%,
+    rgba(10, 12, 16, 0.5) 60%,
+    rgba(10, 12, 16, 0.92) 100%
   );
-} 
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stadium-photos__img { animation: none; transform: scale(1.03); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Interactive cursor spotlight — a soft accent glow that tracks the      */
+/* pointer across the whole app. Purely additive light, never blocks      */
+/* clicks, disabled under reduced-motion.                                 */
+/* ---------------------------------------------------------------------- */
+
+.cursor-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    480px circle at var(--mx, 50%) var(--my, 30%),
+    rgba(224, 68, 44, 0.10),
+    transparent 65%
+  );
+  transition: background 120ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cursor-glow { display: none; }
+}
 
 /* ---------------------------------------------------------------------- */
 /* Status chips — result state at a glance (OK / X / pass / DQ / record)  */
 /* ---------------------------------------------------------------------- */
 
 .status-chip {
-  @apply inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 6px;
+  padding: 0.125rem 0.5rem;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .status-chip--ok      { background: var(--status-ok-soft);     color: var(--status-ok); }
 .status-chip--fail     { background: var(--status-fail-soft);   color: var(--status-fail); }
@@ -270,21 +321,201 @@ body {
   0%   { background-color: var(--track-soft); }
   100% { background-color: transparent; }
 }
-.value-flash {
-  animation: value-flash 900ms ease-out;
+.value-flash { animation: value-flash 900ms ease-out; }
+
+/* ---------------------------------------------------------------------- */
+/* Buttons — one consistent library, several intents                      */
+/* ---------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 1.1rem;
+  transition: transform 160ms var(--ease-swift), box-shadow 160ms var(--ease-swift), background-color 160ms var(--ease-swift), opacity 160ms var(--ease-swift), border-color 160ms var(--ease-swift);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.btn-primary {
+  color: white;
+  background: linear-gradient(180deg, var(--track-light), var(--track));
+  box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 8px 20px -8px rgba(224,68,44,0.55);
+}
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 10px 26px -8px rgba(224,68,44,0.7);
+  transform: translateY(-1px);
 }
 
+.btn-secondary {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  border-color: var(--border-strong);
+}
+.btn-secondary:hover:not(:disabled) { background: var(--surface-2); border-color: rgba(255,255,255,0.28); }
+
+.btn-ghost {
+  color: var(--muted);
+  background: transparent;
+}
+.btn-ghost:hover:not(:disabled) { color: var(--ink); background: rgba(255,255,255,0.05); }
+
+.btn-danger {
+  color: var(--status-fail);
+  background: var(--status-fail-soft);
+}
+.btn-danger:hover:not(:disabled) { background: rgba(239,68,68,0.24); }
+
+.btn-icon {
+  padding: 0.5rem;
+  border-radius: 999px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Inputs — floating-label ready                                          */
+/* ---------------------------------------------------------------------- */
+
+.field {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.8rem;
+  font-size: 0.875rem;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 160ms var(--ease-swift), box-shadow 160ms var(--ease-swift), background-color 160ms var(--ease-swift);
+}
+.field:focus {
+  border-color: var(--track);
+  box-shadow: 0 0 0 3px var(--track-soft);
+  background: var(--surface-3, var(--surface-2));
+}
+.field::placeholder { color: rgba(138,147,166,0.55); }
+.field:disabled { opacity: 0.4; }
+
+.field-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Skeleton / shimmer loading                                             */
+/* ---------------------------------------------------------------------- */
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  background-size: 400px 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Hero banner — showcase use of the track photo (MeetSetup / marketing    */
+/* moments), premium SaaS-hero treatment with parallax tilt applied via    */
+/* inline transform from the ParallaxHero component.                      */
+/* ---------------------------------------------------------------------- */
+
+.hero-panel {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 30px 60px -24px rgba(0,0,0,0.7);
+}
+
+.hero-panel__img {
+  position: absolute;
+  inset: 0;
+  background-image: url('/images/track-hero.jpg');
+  background-size: cover;
+  background-position: center 58%;
+  filter: saturate(1.2) contrast(1.08) brightness(0.72);
+  will-change: transform;
+}
+
+.hero-panel__overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(10,12,16,0.15) 0%, rgba(10,12,16,0.55) 55%, rgba(10,12,16,0.94) 100%),
+    linear-gradient(100deg, rgba(224,68,44,0.28), transparent 55%);
+}
+
+.glass-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #F2F4F8;
+  background: rgba(18, 21, 28, 0.55);
+  border: 1px solid rgba(255,255,255,0.16);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* subtle scanning light sweeping across the hero, echoes a finish-line    */
+/* photo-cell scan — one deliberate signature motion, used once.          */
+@keyframes scan-sweep {
+  0%   { transform: translateX(-120%) skewX(-12deg); opacity: 0; }
+  8%   { opacity: 0.55; }
+  35%  { opacity: 0.55; }
+  50%  { transform: translateX(220%) skewX(-12deg); opacity: 0; }
+  100% { transform: translateX(220%) skewX(-12deg); opacity: 0; }
+}
+.hero-panel__scan {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.hero-panel__scan::after {
+  content: "";
+  position: absolute;
+  top: -10%;
+  bottom: -10%;
+  width: 18%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.16), transparent);
+  animation: scan-sweep 7s ease-in-out infinite;
+  animation-delay: 1.2s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-panel__scan::after { animation: none; display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor-glow { display: none; }
+} 
+
 @media print {
-  body {
-    background: white !important;
-    color: black !important;
-  }
-
-  header, nav, button, .print\:hidden {
-    display: none !important;
-  }
-
-  .page-break {
-    page-break-after: always;
-  }
+  body { background: white !important; color: black !important; }
+  header, nav, button, .print\:hidden { display: none !important; }
+  .page-break { page-break-after: always; }
 }
