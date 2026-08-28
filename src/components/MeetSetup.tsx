@@ -6,15 +6,19 @@ import { createMeet, addTeamsBulk } from "@/lib/actions";
 import { EVENT_GROUPS } from "@/lib/scoring";
 import { EventEligibility, Gender } from "@/lib/types";
 import Button from "./ui/Button";
-import { IconJump, IconRunning, IconShooting, IconThrow } from "./ui/icons";
+import { IconChevronLeft, IconJump, IconRunning, IconShooting, IconThrow } from "./ui/icons";
 import ParallaxHero from "./ui/Parallaxhero";
 
 interface Props {
   ownerId: string;
   onCreated?: (id: string) => void;
+  onBack?: () => void;
 }
 
-type EligibilityDraft = Record<string, { ageGroups: string[]; genders: Gender[] }>;
+// Возрастные группы теперь задаются раздельно по полу: для каждой
+// дисциплины — отдельный список возрастных групп для юношей и отдельный
+// для девушек (ключ отсутствует/пуст = пол не допущен к дисциплине).
+type EligibilityDraft = Record<string, Partial<Record<Gender, string[]>>>;
 
 const groupIcon: Record<string, (props: any) => JSX.Element> = {
   "Бег": IconRunning,
@@ -23,7 +27,7 @@ const groupIcon: Record<string, (props: any) => JSX.Element> = {
   "Стрельба": IconShooting,
 };
 
-export default function MeetSetup({ ownerId, onCreated }: Props) {
+export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
   const [name, setName] = useState("");
   const [place, setPlace] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -44,21 +48,12 @@ export default function MeetSetup({ ownerId, onCreated }: Props) {
       if (next[key]) {
         delete next[key];
       } else {
-        next[key] = { ageGroups: [...ageGroups], genders: ["м", "ж"] };
+        // По умолчанию включаем дисциплину сразу для обоих полов со всеми
+        // текущими возрастными группами — дальше можно раздельно
+        // подправить возрастные группы для юношей и для девушек.
+        next[key] = { м: [...ageGroups], ж: [...ageGroups] };
       }
       return next;
-    });
-  }
-
-  function toggleAgeGroupForEvent(key: string, ag: string) {
-    setEligibility((prev) => {
-      const cur = prev[key];
-      if (!cur) return prev;
-      const has = cur.ageGroups.includes(ag);
-      return {
-        ...prev,
-        [key]: { ...cur, ageGroups: has ? cur.ageGroups.filter((x) => x !== ag) : [...cur.ageGroups, ag] },
-      };
     });
   }
 
@@ -66,10 +61,25 @@ export default function MeetSetup({ ownerId, onCreated }: Props) {
     setEligibility((prev) => {
       const cur = prev[key];
       if (!cur) return prev;
-      const has = cur.genders.includes(g);
+      const nextForEvent = { ...cur };
+      if (nextForEvent[g]) {
+        delete nextForEvent[g];
+      } else {
+        nextForEvent[g] = [...ageGroups];
+      }
+      return { ...prev, [key]: nextForEvent };
+    });
+  }
+
+  function toggleAgeGroupForEvent(key: string, g: Gender, ag: string) {
+    setEligibility((prev) => {
+      const cur = prev[key];
+      const list = cur?.[g];
+      if (!cur || !list) return prev;
+      const has = list.includes(ag);
       return {
         ...prev,
-        [key]: { ...cur, genders: has ? cur.genders.filter((x) => x !== g) : [...cur.genders, g] },
+        [key]: { ...cur, [g]: has ? list.filter((x) => x !== ag) : [...list, ag] },
       };
     });
   }
@@ -81,16 +91,24 @@ export default function MeetSetup({ ownerId, onCreated }: Props) {
       .map((t) => t.trim())
       .filter(Boolean);
 
-    if (teams.length === 0 || ageGroups.length === 0 || Object.keys(eligibility).length === 0) {
-      alert("Укажите хотя бы одну команду, возрастную группу и дисциплину!");
-      return;
+    // Разворачиваем черновик в отдельные записи допуска — по одной на
+    // каждый допущенный пол дисциплины, со своим набором возрастных групп.
+    const eventEligibility: EventEligibility[] = [];
+    for (const [eventKey, byGender] of Object.entries(eligibility)) {
+      (Object.keys(byGender) as Gender[]).forEach((g) => {
+        const ags = byGender[g];
+        if (ags && ags.length > 0) {
+          eventEligibility.push({ eventKey, ageGroups: ags, genders: [g] });
+        }
+      });
     }
 
-    const eventEligibility: EventEligibility[] = Object.entries(eligibility).map(([eventKey, v]) => ({
-      eventKey,
-      ageGroups: v.ageGroups,
-      genders: v.genders,
-    }));
+    if (teams.length === 0 || ageGroups.length === 0 || eventEligibility.length === 0) {
+      alert(
+        "Укажите хотя бы одну команду, возрастную группу и дисциплину с хотя бы одним допущенным полом и возрастной группой!"
+      );
+      return;
+    }
 
     const meet = await createMeet(ownerId, name, date || null, place || null, ageGroups, eventEligibility);
     await addTeamsBulk(meet.id, teams);
@@ -102,11 +120,22 @@ export default function MeetSetup({ ownerId, onCreated }: Props) {
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
-    <ParallaxHero
-      eyebrow="Новый протокол"
-      title="Новое соревнование"
-      subtitle="Задайте команды, возрастные группы и дисциплины один раз — дальше судейская коллегия вносит только результаты."
-    />
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-xs font-semibold text-blue hover:text-blue-light inline-flex items-center gap-1 transition group"
+        >
+          <IconChevronLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
+          Назад к списку соревнований
+        </button>
+      )}
+
+      <ParallaxHero
+        eyebrow="Новый протокол"
+        title="Новое соревнование"
+        subtitle="Задайте команды, возрастные группы и дисциплины один раз — дальше судейская коллегия вносит только результаты."
+      />
 
       <motion.form
         initial={{ opacity: 0, y: 14 }}
@@ -159,7 +188,7 @@ export default function MeetSetup({ ownerId, onCreated }: Props) {
             <div>
               <label className="field-label !mb-1">Дисциплины соревнования — и кто в них допущен</label>
               <p className="text-[11px] text-muted">
-                Отметьте дисциплину, затем укажите для неё пол и возрастные группы.
+                Отметьте дисциплину, затем укажите для неё пол и возрастные группы — отдельно для юношей и для девушек.
               </p>
             </div>
             {selectedCount > 0 && (
@@ -203,44 +232,51 @@ export default function MeetSetup({ ownerId, onCreated }: Props) {
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: "auto" }}
                             transition={{ duration: 0.2 }}
-                            className="pl-6 space-y-2"
+                            className="pl-6 space-y-3"
                           >
-                            <div className="flex gap-3">
-                              {(["м", "ж"] as Gender[]).map((g) => (
-                                <label key={g} className="flex items-center gap-1 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={eligibility[ev.key].genders.includes(g)}
-                                    onChange={() => toggleGenderForEvent(ev.key, g)}
-                                    className="accent-track"
-                                  />
-                                  {g === "м" ? "Юноши" : "Девушки"}
-                                </label>
-                              ))}
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {ageGroups.map((ag) => {
-                                const checked = eligibility[ev.key].ageGroups.includes(ag);
-                                return (
-                                  <label
-                                    key={ag}
-                                    className={`px-2 py-1 rounded border cursor-pointer num transition ${
-                                      checked
-                                        ? "bg-track text-white border-track"
-                                        : "border-white/10 text-[var(--ink)]/70 hover:border-white/20"
-                                    }`}
-                                  >
+                            {(["м", "ж"] as Gender[]).map((g) => {
+                              const genderActive = !!eligibility[ev.key]?.[g];
+                              const selectedAgeGroups = eligibility[ev.key]?.[g] ?? [];
+                              return (
+                                <div key={g} className="space-y-1.5">
+                                  <label className="flex items-center gap-2 cursor-pointer text-[11px] font-bold uppercase tracking-wide text-muted">
                                     <input
                                       type="checkbox"
-                                      className="hidden"
-                                      checked={checked}
-                                      onChange={() => toggleAgeGroupForEvent(ev.key, ag)}
+                                      checked={genderActive}
+                                      onChange={() => toggleGenderForEvent(ev.key, g)}
+                                      className="accent-track"
                                     />
-                                    {ag}
+                                    {g === "м" ? "Юноши" : "Девушки"}
                                   </label>
-                                );
-                              })}
-                            </div>
+
+                                  {genderActive && (
+                                    <div className="flex flex-wrap gap-2 pl-5">
+                                      {ageGroups.map((ag) => {
+                                        const checked = selectedAgeGroups.includes(ag);
+                                        return (
+                                          <label
+                                            key={ag}
+                                            className={`px-2 py-1 rounded border cursor-pointer num transition ${
+                                              checked
+                                                ? "bg-track text-white border-track"
+                                                : "border-white/10 text-[var(--ink)]/70 hover:border-white/20"
+                                            }`}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              className="hidden"
+                                              checked={checked}
+                                              onChange={() => toggleAgeGroupForEvent(ev.key, g, ag)}
+                                            />
+                                            {ag}
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </motion.div>
                         )}
                       </motion.div>

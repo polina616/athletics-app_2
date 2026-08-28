@@ -5,7 +5,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { addEntry } from "@/lib/actions";
 import { getEvent } from "@/lib/scoring";
-import { ResultStatus, STATUS_LABELS } from "@/lib/types";
+import { Gender, ResultStatus, STATUS_LABELS } from "@/lib/types";
 import Modal from "./ui/Modal";
 import Button from "./ui/Button";
 
@@ -27,17 +27,28 @@ export default function ResultModal({ meetId, eventKey, isOpen, onClose }: Props
     [meetId]
   );
 
-  // Получаем уже существующие записи для этой дисциплины
   const existingEntries = useLiveQuery(
     () => db.entries.where({ meetId, eventKey }).filter((e) => !e.deleted).toArray(),
     [meetId, eventKey]
   );
 
-  const eligibility = meet?.eventEligibility.find((el) => el.eventKey === eventKey);
-  const allowedGenders = eligibility?.genders.length ? eligibility.genders : ["м", "ж"];
-  const allowedAgeGroups = eligibility?.ageGroups.length ? eligibility.ageGroups : meet?.ageGroups ?? [];
+  // Дисциплина может быть допущена раздельно для юношей и девушек со
+  // своими возрастными группами (см. MeetSetup) — тогда для одного
+  // eventKey в eventEligibility будет несколько записей. Спортсмен
+  // допущен, если подходит хотя бы под одну из них.
+  const eligibilityRows = meet?.eventEligibility.filter((el) => el.eventKey === eventKey) ?? [];
 
-  // Множество ID спортсменов, которые уже имеют результат в этой дисциплине
+  function isAthleteAllowed(a: { gender: Gender; ageGroup: string }) {
+    if (eligibilityRows.length === 0) {
+      return (meet?.ageGroups ?? []).includes(a.ageGroup);
+    }
+    return eligibilityRows.some(
+      (el) =>
+        (el.genders.length ? el.genders.includes(a.gender) : true) &&
+        (el.ageGroups.length ? el.ageGroups.includes(a.ageGroup) : true)
+    );
+  }
+
   const athleteIdsWithResults = useMemo(() => {
     return new Set(existingEntries?.map((e) => e.athleteId) ?? []);
   }, [existingEntries]);
@@ -45,12 +56,10 @@ export default function ResultModal({ meetId, eventKey, isOpen, onClose }: Props
   const filteredAthletes = useMemo(() => {
     if (!athletes) return [];
     return athletes.filter(
-      (a) =>
-        allowedGenders.includes(a.gender) &&
-        allowedAgeGroups.includes(a.ageGroup) &&
-        !athleteIdsWithResults.has(a.id) // исключаем тех, у кого уже есть результат
+      (a) => isAthleteAllowed(a) && !athleteIdsWithResults.has(a.id) // исключаем тех, у кого уже есть результат
     );
-  }, [athletes, allowedGenders, allowedAgeGroups, athleteIdsWithResults]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athletes, meet?.eventEligibility, athleteIdsWithResults]);
 
   const teamName = (id: string) => teams?.find((t) => t.id === id)?.name ?? "—";
 

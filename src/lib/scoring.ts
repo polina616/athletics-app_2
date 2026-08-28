@@ -47,6 +47,11 @@ export const EVENTS: EventConfig[] = [
     unitHint: "сек, напр. 58.40", exponent: 1.85,
     anchors: { м: { elite: 48.5, base: 75.0 }, ж: { elite: 54.0, base: 85.0 } },
   },
+    {
+    key: "500m", name: "Бег 500 м", cat: "track", timeFmt: "sec",
+    unitHint: "сек, напр. 78.40", exponent: 1.87,
+    anchors: { м: { elite: 62.0, base: 95.0 }, ж: { elite: 70.0, base: 105.0 } },
+  },
   {
     key: "800m", name: "Бег 800 м", cat: "track", timeFmt: "mmss",
     unitHint: "мм:сс.д, напр. 2:35.80", exponent: 1.9,

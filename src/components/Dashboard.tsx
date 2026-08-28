@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
@@ -7,8 +8,10 @@ import { useAppStore } from "@/store/useAppStore";
 import { exportCsv } from "@/lib/exportCsv";
 import StandingsTabs from "./StandingsTabs";
 import AthletesList from "./AthletesList";
+import AthleteCoverage from "./AthleteCoverage";
 import AthleteModal from "./AthleteModal";
-import ResultModal from "./ResultModal";
+import BulkAthleteImport from "./BulkAthleteImport";
+import MeetSettingsModal from "./MeetSettingsModal";
 import Button from "./ui/Button";
 import StatCard from "./ui/StatCard";
 import { IconChevronLeft, IconDownload, IconFlag, IconPlus, IconUsers } from "./ui/icons";
@@ -28,14 +31,9 @@ export default function Dashboard({ meetId }: { meetId: string }) {
     [meetId]
   );
 
-  const {
-    isAthleteModalOpen,
-    isResultModalOpen,
-    selectedEventKey,
-    setAthleteModalOpen,
-    setResultModalOpen,
-    setCurrentMeetId,
-  } = useAppStore();
+  const { isAthleteModalOpen, setAthleteModalOpen, setCurrentMeetId } = useAppStore();
+  const [isBulkImportOpen, setBulkImportOpen] = useState(false);
+  const [isSettingsOpen, setSettingsOpen] = useState(false);
 
   if (!meet) {
     return (
@@ -53,7 +51,6 @@ export default function Dashboard({ meetId }: { meetId: string }) {
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-8 relative z-0">
-      {/* Шапка */}
       <div className="flex flex-wrap items-start justify-between gap-6 border-b border-white/10 pb-6">
         <div>
           <button
@@ -70,9 +67,15 @@ export default function Dashboard({ meetId }: { meetId: string }) {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="secondary" onClick={() => setSettingsOpen(true)}>
+            ⚙ Настройки
+          </Button>
           <Button variant="secondary" onClick={() => exportCsv(meetId)}>
             <IconDownload className="w-4 h-4" /> Экспорт в CSV
+          </Button>
+          <Button variant="secondary" onClick={() => setBulkImportOpen(true)}>
+            <IconUsers className="w-4 h-4" /> Добавить команду списком
           </Button>
           <Button variant="primary" onClick={() => setAthleteModalOpen(true)}>
             <IconPlus className="w-4 h-4" /> Зарегистрировать спортсмена
@@ -80,7 +83,7 @@ export default function Dashboard({ meetId }: { meetId: string }) {
         </div>
       </div>
 
-      {/* Живая сводка соревнования */}
+      
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Участников" value={athletes?.length ?? 0} icon={<IconUsers className="w-5 h-5" />} accent="track" index={0} />
         <StatCard label="Команд" value={teams?.length ?? 0} icon={<IconFlag className="w-5 h-5" />} accent="blue" index={1} />
@@ -88,12 +91,20 @@ export default function Dashboard({ meetId }: { meetId: string }) {
         <StatCard label="Внесено результатов" value={entries?.length ?? 0} icon={<IconUsers className="w-5 h-5" />} accent="track" index={3} />
       </div>
 
-      {/* Основная сетка: протоколы/зачёты слева, реестр участников справа */}
+      {/* Растянута на всю ширину страницы, а не зажата в боковую колонку */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <AthleteCoverage meetId={meetId} />
+      </motion.div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.4, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
           className="lg:col-span-2 space-y-8"
         >
           <StandingsTabs meetId={meetId} />
@@ -102,24 +113,16 @@ export default function Dashboard({ meetId }: { meetId: string }) {
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.4, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
           className="space-y-6"
         >
           <AthletesList meetId={meetId} />
         </motion.div>
       </div>
 
-      {/* Модальные окна */}
       <AthleteModal meetId={meetId} isOpen={isAthleteModalOpen} onClose={() => setAthleteModalOpen(false)} />
-
-      {selectedEventKey && (
-        <ResultModal
-          meetId={meetId}
-          eventKey={selectedEventKey}
-          isOpen={isResultModalOpen}
-          onClose={() => setResultModalOpen(false)}
-        />
-      )}
+      <BulkAthleteImport meetId={meetId} isOpen={isBulkImportOpen} onClose={() => setBulkImportOpen(false)} />
+      <MeetSettingsModal meet={meet} isOpen={isSettingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

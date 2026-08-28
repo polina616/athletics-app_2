@@ -63,7 +63,7 @@ export default function MeetsHome({ ownerId, onSelect }: Props) {
     );
   }
 
-  if (creating || meets.length === 0) {
+    if (creating || meets.length === 0) {
     return (
       <MeetSetup
         ownerId={ownerId}
@@ -71,6 +71,7 @@ export default function MeetsHome({ ownerId, onSelect }: Props) {
           setCreating(false);
           onSelect(id);
         }}
+        onBack={meets.length > 0 ? () => setCreating(false) : undefined}
       />
     );
   }

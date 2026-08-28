@@ -264,3 +264,86 @@ export async function updateManualPoints(entryId: string, meetId: string, manual
   await db.entries.put({ ...entry, manualPoints, updatedAt: nowIso(), dirty: true });
   kickSync(meetId);
 }
+/** Правка уже созданного соревнования: название/дата/место/возрастные
+ *  группы. Уже внесённые результаты не трогаются — если удалить
+ *  возрастную группу, у которой есть записи, сами записи не удаляются,
+ *  просто перестанут попадать в текущие фильтры протокола. */
+export async function updateMeet(
+  meetId: string,
+  patch: Partial<Pick<Meet, "name" | "date" | "place" | "ageGroups">>
+): Promise<void> {
+  const meet = await db.meets.get(meetId);
+  if (!meet) return;
+  await db.meets.put({ ...meet, ...patch, updatedAt: nowIso(), dirty: true });
+  kickSync(meetId);
+}
+
+/** Добавляет/снимает допуск дисциплины у уже созданного соревнования —
+ *  раньше набор дисциплин задавался один раз в MeetSetup. Пустые
+ *  ageGroups/genders означают "снять дисциплину с допуска". */
+export async function setEventEligibility(
+  meetId: string,
+  eventKey: string,
+  ageGroups: string[],
+  genders: Gender[]
+): Promise<void> {
+  const meet = await db.meets.get(meetId);
+  if (!meet) return;
+  const rest = meet.eventEligibility.filter((el) => el.eventKey !== eventKey);
+  const eventEligibility =
+    ageGroups.length && genders.length ? [...rest, { eventKey, ageGroups, genders }] : rest;
+  await db.meets.put({ ...meet, eventEligibility, updatedAt: nowIso(), dirty: true });
+  kickSync(meetId);
+}
+
+/** Массовая регистрация целой команды: судья один раз выбирает команду,
+ *  возраст и пол, затем вставляет ФИО построчно — так же, как команды
+ *  вводятся построчно в MeetSetup. */
+export async function addAthletesBulk(
+  meetId: string,
+  teamId: string,
+  ageGroup: AgeGroup,
+  gender: Gender,
+  namesText: string
+): Promise<number> {
+  const names = namesText.split("\n").map((n) => n.trim()).filter(Boolean);
+
+  const athletes: Athlete[] = names.map((fullName) => ({
+    id: uuid(),
+    meetId,
+    teamId,
+    fullName,
+    ageGroup,
+    gender,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    deleted: false,
+    dirty: true,
+  }));
+
+  await db.athletes.bulkPut(athletes);
+  kickSync(meetId);
+  return athletes.length;
+}
+
+/** Ввод/правка результата прямо из таблицы протокола: если у спортсмена в
+ *  этой дисциплине уже есть запись — обновляет её, иначе создаёт новую.
+ *  Заменяет отдельные модалки ResultModal/EditResultModal одной функцией
+ *  для инлайн-редактора в ProtocolTable. */
+export async function saveResultInline(
+  meetId: string,
+  eventKey: string,
+  athleteId: string,
+  input: { status: ResultStatus | null; resultRaw: string; manualPoints: number | null }
+): Promise<void> {
+  const existing = await db.entries
+    .where({ meetId, eventKey, athleteId })
+    .filter((e) => !e.deleted)
+    .first();
+
+  if (existing) {
+    await updateEntry(existing.id, meetId, input);
+  } else {
+    await addEntry({ meetId, eventKey, athleteId, ...input });
+  }
+}
