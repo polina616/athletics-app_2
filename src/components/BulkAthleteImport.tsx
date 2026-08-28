@@ -38,7 +38,7 @@ export default function BulkAthleteImport({ meetId, isOpen, onClose }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const finalTeamId = teamId || teamsList[0]?.id;
-    const finalAgeGroup = ageGroup || meet.ageGroups?.[0];
+    const finalAgeGroup = ageGroup || meet?.ageGroups?.[0];
     if (!finalTeamId || !finalAgeGroup || namesCount === 0) return;
 
     setSaving(true);
