@@ -2,7 +2,17 @@ import { v4 as uuid } from "uuid";
 import { db } from "./db";
 import { supabase } from "./supabaseClient";
 import { fullSync } from "./sync";
-import { AgeGroup, Athlete, Entry, EventEligibility, Gender, Meet, ResultStatus, Team } from "./types";
+import {
+  AgeGroup,
+  Athlete,
+  Entry,
+  EventCustomParams,
+  EventEligibility,
+  Gender,
+  Meet,
+  ResultStatus,
+  Team,
+} from "./types";
 import { computeAutoPoints, getEvent, parseResult } from "./scoring";
 
 function nowIso() {
@@ -21,7 +31,8 @@ export async function createMeet(
   date: string | null,
   place: string | null,
   ageGroups: string[],
-  eventEligibility: EventEligibility[]
+  eventEligibility: EventEligibility[],
+  eventParams: Record<string, EventCustomParams> = {}
 ): Promise<Meet> {
   const meet: Meet = {
     id: uuid(),
@@ -31,6 +42,7 @@ export async function createMeet(
     place,
     ageGroups,
     eventEligibility,
+    eventParams,
     createdAt: nowIso(),
     updatedAt: nowIso(),
     dirty: true,
@@ -95,13 +107,16 @@ export async function addTeamsBulk(meetId: string, names: string[]): Promise<voi
 }
 
 /** Сохраняет спортсмена один раз — дальше он выбирается из справочника при
- *  внесении результатов по любой дисциплине, без повторного ввода ФИО. */
+ *  внесении результатов по любой дисциплине, без повторного ввода ФИО.
+ *  Стартовый номер (bib) вводится судьёй вручную — здесь ничего не
+ *  подставляется автоматически. */
 export async function addAthlete(
   meetId: string,
   teamId: string,
   fullName: string,
   ageGroup: AgeGroup,
-  gender: Gender
+  gender: Gender,
+  bib: string
 ): Promise<Athlete> {
   const athlete: Athlete = {
     id: uuid(),
@@ -110,6 +125,7 @@ export async function addAthlete(
     fullName: fullName.trim(),
     ageGroup,
     gender,
+    bib: bib.trim(),
     createdAt: nowIso(),
     updatedAt: nowIso(),
     deleted: false,
@@ -123,7 +139,7 @@ export async function addAthlete(
 export async function updateAthlete(
   id: string,
   meetId: string,
-  patch: Partial<Pick<Athlete, "fullName" | "teamId" | "ageGroup" | "gender">>
+  patch: Partial<Pick<Athlete, "fullName" | "teamId" | "ageGroup" | "gender" | "bib">>
 ): Promise<void> {
   const a = await db.athletes.get(id);
   if (!a) return;
@@ -131,9 +147,10 @@ export async function updateAthlete(
   kickSync(meetId);
 
   // Держим уже внесённые результаты в согласованном состоянии: если у
-  // спортсмена поменялась команда/возраст/пол — старые Entry обновляем
-  // тоже, иначе протокол и командный зачёт "разъедутся" с реальностью.
-  if (patch.teamId || patch.ageGroup || patch.gender) {
+  // спортсмена поменялась команда/возраст/пол/ФИО/номер — старые Entry
+  // обновляем тоже, иначе протокол и командный зачёт "разъедутся" с
+  // реальностью.
+  if (patch.teamId || patch.ageGroup || patch.gender || patch.fullName || patch.bib !== undefined) {
     const entries = await db.entries.where({ meetId, athleteId: id }).toArray();
     await db.transaction("rw", db.entries, async () => {
       for (const e of entries) {
@@ -143,6 +160,7 @@ export async function updateAthlete(
           ageGroup: patch.ageGroup ?? e.ageGroup,
           gender: patch.gender ?? e.gender,
           athleteName: patch.fullName ?? e.athleteName,
+          bib: patch.bib !== undefined ? patch.bib : e.bib,
           updatedAt: nowIso(),
           dirty: true,
         });
@@ -173,6 +191,7 @@ export async function addEntry(input: NewEntryInput): Promise<Entry> {
   const ev = getEvent(input.eventKey);
   const athlete = await db.athletes.get(input.athleteId);
   if (!athlete) throw new Error("Спортсмен не найден в справочнике");
+  const meet = await db.meets.get(input.meetId);
 
   let resultSeconds: number | null = null;
   let auto = 0;
@@ -181,11 +200,11 @@ export async function addEntry(input: NewEntryInput): Promise<Entry> {
   if (!input.status) {
     const value = parseResult(ev, input.resultRaw);
     resultSeconds = Number.isNaN(value) ? null : value;
-    auto = computeAutoPoints(ev, athlete.gender, value);
+    const distanceMeters = ev.customDistance ? meet?.eventParams?.[input.eventKey]?.distanceMeters : undefined;
+    auto = computeAutoPoints(ev, athlete.gender, value, distanceMeters);
     resultRaw = input.resultRaw.trim();
   }
 
-  const existingCount = await db.entries.where({ meetId: input.meetId }).count();
   const entry: Entry = {
     id: uuid(),
     meetId: input.meetId,
@@ -195,7 +214,7 @@ export async function addEntry(input: NewEntryInput): Promise<Entry> {
     gender: athlete.gender,
     athleteId: athlete.id,
     athleteName: athlete.fullName,
-    bib: String(existingCount + 1).padStart(3, "0"),
+    bib: athlete.bib,
     status: input.status,
     resultRaw,
     resultSeconds,
@@ -226,6 +245,7 @@ export async function updateEntry(entryId: string, meetId: string, input: Update
   if (!entry) return;
   const ev = getEvent(entry.eventKey);
   const athlete = await db.athletes.get(entry.athleteId);
+  const meet = await db.meets.get(meetId);
 
   let resultSeconds: number | null = null;
   let auto = 0;
@@ -234,7 +254,8 @@ export async function updateEntry(entryId: string, meetId: string, input: Update
   if (!input.status) {
     const value = parseResult(ev, input.resultRaw);
     resultSeconds = Number.isNaN(value) ? null : value;
-    auto = computeAutoPoints(ev, athlete?.gender ?? entry.gender, value);
+    const distanceMeters = ev.customDistance ? meet?.eventParams?.[entry.eventKey]?.distanceMeters : undefined;
+    auto = computeAutoPoints(ev, athlete?.gender ?? entry.gender, value, distanceMeters);
     resultRaw = input.resultRaw.trim();
   }
 
@@ -264,6 +285,7 @@ export async function updateManualPoints(entryId: string, meetId: string, manual
   await db.entries.put({ ...entry, manualPoints, updatedAt: nowIso(), dirty: true });
   kickSync(meetId);
 }
+
 /** Правка уже созданного соревнования: название/дата/место/возрастные
  *  группы. Уже внесённые результаты не трогаются — если удалить
  *  возрастную группу, у которой есть записи, сами записи не удаляются,
@@ -296,30 +318,47 @@ export async function setEventEligibility(
   kickSync(meetId);
 }
 
+/** Дистанция/этапы для лыж и эстафеты — задаётся при создании, но можно
+ *  поправить и позже через настройки соревнования. */
+export async function setEventCustomParams(
+  meetId: string,
+  eventKey: string,
+  params: EventCustomParams
+): Promise<void> {
+  const meet = await db.meets.get(meetId);
+  if (!meet) return;
+  const eventParams = { ...(meet.eventParams ?? {}), [eventKey]: params };
+  await db.meets.put({ ...meet, eventParams, updatedAt: nowIso(), dirty: true });
+  kickSync(meetId);
+}
+
 /** Массовая регистрация целой команды: судья один раз выбирает команду,
- *  возраст и пол, затем вставляет ФИО построчно — так же, как команды
- *  вводятся построчно в MeetSetup. */
+ *  возраст и пол, затем построчно вводит стартовый номер и ФИО — номер
+ *  задаётся вручную для каждого спортсмена, автоматически ничего не
+ *  подставляется. */
 export async function addAthletesBulk(
   meetId: string,
   teamId: string,
   ageGroup: AgeGroup,
   gender: Gender,
-  namesText: string
+  entries: { bib: string; fullName: string }[]
 ): Promise<number> {
-  const names = namesText.split("\n").map((n) => n.trim()).filter(Boolean);
-
-  const athletes: Athlete[] = names.map((fullName) => ({
-    id: uuid(),
-    meetId,
-    teamId,
-    fullName,
-    ageGroup,
-    gender,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-    deleted: false,
-    dirty: true,
-  }));
+  const athletes: Athlete[] = entries
+    .map((e) => ({ bib: e.bib.trim(), fullName: e.fullName.trim() }))
+    .filter((e) => e.bib && e.fullName)
+    .map(({ bib, fullName }) => ({
+      id: uuid(),
+      meetId,
+      teamId,
+      fullName,
+      ageGroup,
+      gender,
+      bib,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      deleted: false,
+      dirty: true,
+    }));
 
   await db.athletes.bulkPut(athletes);
   kickSync(meetId);

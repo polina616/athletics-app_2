@@ -61,6 +61,7 @@ export default function EditResultModal({ entry, isOpen, onClose }: Props) {
       </div>
 
       <p className="text-xs text-muted -mt-2">
+        {entry.bib ? `№${entry.bib} • ` : ""}
         {entry.athleteName} • {eventConfig.name} • {entry.ageGroup} ({entry.gender === "м" ? "Ю" : "Д"})
       </p>
 

@@ -101,6 +101,7 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
                           <table className="w-full text-left">
                             <thead className="text-muted font-bold border-b border-white/5">
                               <tr>
+                                <th className="py-1">№</th>
                                 <th className="py-1">Спортсмен</th>
                                 <th className="py-1">Вид</th>
                                 <th className="py-1">Категория</th>
@@ -115,6 +116,7 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
 
                                 return (
                                   <tr key={idx}>
+                                    <td className="py-1.5 num text-muted">{r.bib ?? "—"}</td>
                                     <td className="py-1.5 font-medium">{r.athleteName}</td>
                                     <td className="py-1.5 text-[var(--ink)]/80">{ev.name}</td>
                                     <td className="py-1.5 text-[var(--ink)]/70">

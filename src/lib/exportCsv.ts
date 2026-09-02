@@ -13,11 +13,12 @@ export async function exportCsv(meetId: string): Promise<void> {
   const entries = (await db.entries.where({ meetId }).toArray()).filter((e) => !e.deleted);
   const teamName = (id: string) => teams.find((t) => t.id === id)?.name ?? "—";
 
-  const header = ["Дисциплина", "Возраст", "Пол", "Команда", "ФИО", "Результат", "Статус", "Очки", "Источник очков"];
+  const header = ["Номер", "Дисциплина", "Возраст", "Пол", "Команда", "ФИО", "Результат", "Статус", "Очки", "Источник очков"];
   const rows = entries.map((e) => {
     const ev = getEvent(e.eventKey);
     const { pts, source } = pointsForEntry(e);
     return [
+      e.bib ?? "",
       ev.name,
       e.ageGroup,
       e.gender,
@@ -31,9 +32,9 @@ export async function exportCsv(meetId: string): Promise<void> {
   });
 
   const standings = computeTeamStandings(entries, teams);
-  const standingsRows = standings.map((s, i) => ["", "", "", "", `${i + 1}. ${s.teamName}`, "", "", s.total, ""]);
+  const standingsRows = standings.map((s, i) => ["", "", "", "", "", `${i + 1}. ${s.teamName}`, "", "", s.total, ""]);
 
-  const all = [header, ...rows, [], ["", "", "", "", "Командный зачёт", "", "", "", ""], ...standingsRows];
+  const all = [header, ...rows, [], ["", "", "", "", "", "Командный зачёт", "", "", "", ""], ...standingsRows];
   const csv = all.map((r) => r.map(csvCell).join(",")).join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);

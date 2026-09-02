@@ -41,7 +41,7 @@ export function protocolRows(entries: Entry[], eventKey: string, ageGroup: strin
   valid.sort((a, b) => {
     const av = a.resultSeconds as number;
     const bv = b.resultSeconds as number;
-    // бег — меньше время лучше; прыжки/метания/стрельба — больше лучше
+    // бег — меньше время лучше; прыжки/метания/стрельба/сила — больше лучше
     return ev.cat === "track" ? av - bv : bv - av;
   });
 
@@ -80,6 +80,7 @@ export function computeTeamStandings(entries: Entry[], teams: Team[]): TeamStand
 export interface TeamBreakdownRow {
   eventKey: string;
   athleteName: string;
+  bib: string | null;
   ageGroup: string;
   gender: Gender;
   status: Entry["status"];
@@ -106,6 +107,7 @@ export function teamBreakdowns(entries: Entry[], teams: Team[]): TeamBreakdown[]
           return {
             eventKey: e.eventKey,
             athleteName: e.athleteName,
+            bib: e.bib,
             ageGroup: e.ageGroup,
             gender: e.gender,
             status: e.status,
@@ -122,6 +124,7 @@ export function teamBreakdowns(entries: Entry[], teams: Team[]): TeamBreakdown[]
 export interface AllAroundRow {
   athleteId: string;
   athleteName: string;
+  bib: string | null;
   teamName: string;
   ageGroup: string;
   gender: Gender;
@@ -142,6 +145,7 @@ export function personalAllAround(entries: Entry[], athletes: Athlete[], teams: 
     byAthlete.set(a.id, {
       athleteId: a.id,
       athleteName: a.fullName,
+      bib: a.bib,
       teamName: teamName(a.teamId),
       ageGroup: a.ageGroup,
       gender: a.gender,

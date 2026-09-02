@@ -14,9 +14,32 @@ interface Props {
   onClose: () => void;
 }
 
+interface ParsedLine {
+  raw: string;
+  bib: string;
+  fullName: string;
+  valid: boolean;
+}
+
+/** Формат строки: "номер, ФИО" — номер вводится вручную для каждого
+ *  спортсмена, ничего не подставляется автоматически. */
+function parseLines(text: string): ParsedLine[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((raw) => {
+      const idx = raw.indexOf(",");
+      if (idx === -1) return { raw, bib: "", fullName: raw, valid: false };
+      const bib = raw.slice(0, idx).trim();
+      const fullName = raw.slice(idx + 1).trim();
+      return { raw, bib, fullName, valid: !!bib && !!fullName };
+    });
+}
+
 /** Регистрация целой командой одним вводом: выбираем команду/возраст/пол
- *  один раз, затем вставляем ФИО построчно — как ввод команд/возрастных
- *  групп построчно в MeetSetup. */
+ *  один раз, затем построчно вводим номер и ФИО — как ввод команд/
+ *  возрастных групп построчно в MeetSetup. */
 export default function BulkAthleteImport({ meetId, isOpen, onClose }: Props) {
   const meet = useLiveQuery(() => db.meets.get(meetId), [meetId]);
   const teams = useLiveQuery(
@@ -27,24 +50,32 @@ export default function BulkAthleteImport({ meetId, isOpen, onClose }: Props) {
   const [teamId, setTeamId] = useState("");
   const [ageGroup, setAgeGroup] = useState("");
   const [gender, setGender] = useState<Gender>("м");
-  const [namesText, setNamesText] = useState("");
+  const [linesText, setLinesText] = useState("");
   const [saving, setSaving] = useState(false);
 
   if (!isOpen || !meet) return null;
 
   const teamsList = teams ?? [];
-  const namesCount = namesText.split("\n").map((n) => n.trim()).filter(Boolean).length;
+  const parsed = parseLines(linesText);
+  const validLines = parsed.filter((p) => p.valid);
+  const invalidLines = parsed.filter((p) => !p.valid);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const finalTeamId = teamId || teamsList[0]?.id;
     const finalAgeGroup = ageGroup || meet?.ageGroups?.[0];
-    if (!finalTeamId || !finalAgeGroup || namesCount === 0) return;
+    if (!finalTeamId || !finalAgeGroup || validLines.length === 0) return;
 
     setSaving(true);
     try {
-      await addAthletesBulk(meetId, finalTeamId, finalAgeGroup, gender, namesText);
-      setNamesText("");
+      await addAthletesBulk(
+        meetId,
+        finalTeamId,
+        finalAgeGroup,
+        gender,
+        validLines.map((l) => ({ bib: l.bib, fullName: l.fullName }))
+      );
+      setLinesText("");
       onClose();
     } finally {
       setSaving(false);
@@ -103,24 +134,33 @@ export default function BulkAthleteImport({ meetId, isOpen, onClose }: Props) {
         </div>
 
         <div>
-          <label className="field-label">ФИО спортсменов (по одному на строку)</label>
+          <label className="field-label">Номер и ФИО (по одному участнику на строку, формат: "номер, ФИО")</label>
           <textarea
             rows={8}
-            value={namesText}
-            onChange={(e) => setNamesText(e.target.value)}
-            placeholder={"Иванов Иван\nПетров Пётр\nСидоров Семён"}
-            className="field"
+            value={linesText}
+            onChange={(e) => setLinesText(e.target.value)}
+            placeholder={"101, Иванов Иван\n102, Петров Пётр\n103, Сидоров Семён"}
+            className="field num"
             autoFocus
           />
-          {namesCount > 0 && <p className="text-[11px] num text-muted mt-1">Будет добавлено: {namesCount}</p>}
+          <div className="flex items-center justify-between mt-1">
+            {validLines.length > 0 && (
+              <p className="text-[11px] num text-muted">Готово к добавлению: {validLines.length}</p>
+            )}
+            {invalidLines.length > 0 && (
+              <p className="text-[11px] num text-gold">
+                Не распознано строк: {invalidLines.length} (нужен формат "номер, ФИО")
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
           <Button variant="secondary" type="button" onClick={onClose}>
             Отмена
           </Button>
-          <Button variant="primary" type="submit" disabled={saving || namesCount === 0}>
-            {saving ? "Сохранение..." : `Добавить (${namesCount})`}
+          <Button variant="primary" type="submit" disabled={saving || validLines.length === 0}>
+            {saving ? "Сохранение..." : `Добавить (${validLines.length})`}
           </Button>
         </div>
       </form>

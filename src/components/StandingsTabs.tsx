@@ -141,7 +141,8 @@ export default function StandingsTabs({ meetId }: { meetId: string }) {
                       <table className="w-full text-left text-xs">
                         <thead className="text-muted border-b border-white/10 font-bold uppercase text-[10px] tracking-wide">
                           <tr>
-                            <th className="py-2 w-8">№</th>
+                            <th className="py-2 w-8">Место</th>
+                            <th className="py-2 w-14">№</th>
                             <th className="py-2">Спортсмен</th>
                             <th className="py-2">Команда</th>
                             <th className="py-2">Видов</th>
@@ -168,6 +169,7 @@ export default function StandingsTabs({ meetId }: { meetId: string }) {
                                   r.place
                                 )}
                               </td>
+                              <td className="py-2 num text-muted">{r.bib ?? "—"}</td>
                               <td className="py-2 font-medium">{r.athleteName}</td>
                               <td className="py-2 text-muted">{r.teamName}</td>
                               <td className="py-2 num text-muted">{Object.keys(r.perEvent).length}</td>

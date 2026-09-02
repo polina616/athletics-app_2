@@ -103,6 +103,7 @@ export default function ResultModal({ meetId, eventKey, isOpen, onClose }: Props
             <option value="">-- выберите спортсмена --</option>
             {filteredAthletes.map((a) => (
               <option key={a.id} value={a.id}>
+                {a.bib ? `№${a.bib} — ` : ""}
                 {a.fullName} ({teamName(a.teamId)}, {a.ageGroup}, {a.gender === "м" ? "Ю" : "Д"})
               </option>
             ))}

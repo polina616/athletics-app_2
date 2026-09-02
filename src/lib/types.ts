@@ -1,4 +1,4 @@
-export type EventCategory = "track" | "jump" | "throw" | "shooting";
+export type EventCategory = "track" | "jump" | "throw" | "shooting" | "strength";
 export type Gender = "м" | "ж";
 /** Возрастная группа — произвольная метка, вводится судьёй вручную при
  *  создании соревнования (например "2012-2013" или "до 10 лет"). */
@@ -33,6 +33,13 @@ export interface EventConfig {
   timeFmt?: "sec" | "mmss";
   anchors?: Partial<Record<Gender, EventAnchor>>;
   exponent?: number;
+  /** true — дистанция/доп. параметры не фиксированы в коде, а задаются
+   *  судьёй при создании (или в настройках) соревнования: лыжи —
+   *  дистанция, эстафета — дистанция и число этапов. */
+  customDistance?: boolean;
+  /** для customDistance: темп (сек на 1 км), реальные anchors на
+   *  конкретную дистанцию считаются как pace × (метры/1000). */
+  paceAnchors?: Partial<Record<Gender, EventAnchor>>;
 }
 
 /** Для какой возрастной группы и пола проводится конкретная дисциплина —
@@ -41,6 +48,14 @@ export interface EventEligibility {
   eventKey: string;
   ageGroups: string[];
   genders: Gender[];
+}
+
+/** Параметры дисциплин с customDistance — дистанция в метрах и (для
+ *  эстафеты) число этапов, вводятся судьёй вручную при создании
+ *  соревнования (или позже, в настройках). */
+export interface EventCustomParams {
+  distanceMeters?: number;
+  legs?: number;
 }
 
 /** Спортсмен сохраняется один раз и переиспользуется во всех видах —
@@ -52,6 +67,10 @@ export interface Athlete {
   teamId: string;
   ageGroup: AgeGroup;
   gender: Gender;
+  /** стартовый номер — вводится судьёй вручную при регистрации,
+   *  автоматически ничего не подставляется. Кэшируется в Entry.bib для
+   *  протоколов и экспорта без join'а со справочником. */
+  bib: string | null;
   createdAt: string;
   updatedAt: string;
   deleted: boolean;
@@ -102,6 +121,9 @@ export interface Meet {
   ageGroups: string[];
   /** для каждой выбранной дисциплины — допустимые возрастные группы и пол */
   eventEligibility: EventEligibility[];
+  /** параметры дисциплин с customDistance (лыжи/эстафета) — по одному
+   *  ключу на eventKey, задаются при создании соревнования */
+  eventParams?: Record<string, EventCustomParams>;
   createdAt: string;
   updatedAt: string;
   dirty?: boolean;

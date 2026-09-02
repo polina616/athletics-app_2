@@ -8,8 +8,9 @@ import { Athlete, Entry, Meet, Team } from "./types";
  * Dexie (dirty: true), затем pushDirty() делает upsert в Supabase по
  * client-generated uuid, pullRemote() подтягивает всё изменённое с сервера
  * с момента последней синхронизации, конфликты — "последняя запись
- * побеждает" по updatedAt. Добавлена таблица athletes — синхронизируется
- * так же, как teams.
+ * побеждает" по updatedAt. Athletes синхронизируются так же, как teams,
+ * плюс поле bib (стартовый номер) и Meet.eventParams (дистанция/этапы для
+ * лыж/эстафеты).
  */
 
 let syncing = false;
@@ -48,7 +49,7 @@ function rowToEntry(r: any): Entry {
     gender: r.gender,
     athleteId: r.athlete_id,
     athleteName: r.athlete_name,
-    bib: r.bib,
+    bib: r.bib ?? null,
     status: r.status ?? null,
     resultRaw: r.result_raw,
     resultSeconds: r.result_seconds,
@@ -82,6 +83,7 @@ function athleteToRow(a: Athlete) {
     meet_id: a.meetId,
     team_id: a.teamId,
     full_name: a.fullName,
+    bib: a.bib,
     age_group: a.ageGroup,
     gender: a.gender,
     deleted: a.deleted,
@@ -94,6 +96,7 @@ function rowToAthlete(r: any): Athlete {
     meetId: r.meet_id,
     teamId: r.team_id,
     fullName: r.full_name,
+    bib: r.bib ?? null,
     ageGroup: r.age_group,
     gender: r.gender,
     createdAt: r.created_at,
@@ -112,6 +115,7 @@ function meetToRow(m: Meet) {
     place: m.place,
     age_groups: m.ageGroups,
     event_eligibility: m.eventEligibility,
+    event_params: m.eventParams ?? {},
     created_at: m.createdAt,
   };
 }
@@ -124,6 +128,7 @@ function rowToMeet(r: any): Meet {
     place: r.place,
     ageGroups: r.age_groups ?? [],
     eventEligibility: r.event_eligibility ?? [],
+    eventParams: r.event_params ?? {},
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     dirty: false,

@@ -26,10 +26,13 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
 
   // Последние выбранные команда/возраст/пол для ЭТОГО соревнования — судья
   // обычно регистрирует несколько спортсменов подряд из одной команды и
-  // категории, так что не нужно каждый раз выбирать заново.
+  // категории, так что не нужно каждый раз выбирать заново. Стартовый
+  // номер НЕ запоминается — он уникален для каждого спортсмена и всегда
+  // вводится судьёй вручную.
   const lastDefaults = useAppStore((s) => s.lastAthleteDefaults[meetId]);
   const setLastAthleteDefaults = useAppStore((s) => s.setLastAthleteDefaults);
 
+  const [bib, setBib] = useState("");
   const [fullName, setFullName] = useState("");
   const [teamId, setTeamId] = useState("");
   const [gender, setGender] = useState<Gender>("м");
@@ -53,11 +56,13 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
     initializedRef.current = true;
 
     if (editingAthlete) {
+      setBib(editingAthlete.bib ?? "");
       setFullName(editingAthlete.fullName);
       setTeamId(editingAthlete.teamId);
       setGender(editingAthlete.gender);
       setAgeGroup(editingAthlete.ageGroup);
     } else {
+      setBib("");
       setFullName("");
 
       // Берём запомненное значение, только если оно всё ещё существует в
@@ -87,6 +92,10 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!fullName.trim()) return;
+    if (!bib.trim()) {
+      alert("Укажите стартовый номер спортсмена.");
+      return;
+    }
 
     const finalTeamId = teamId || teamsList[0]?.id;
     const finalAgeGroup = ageGroup || meet?.ageGroups?.[0];
@@ -106,9 +115,10 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
         teamId: finalTeamId,
         ageGroup: finalAgeGroup,
         gender,
+        bib: bib.trim(),
       });
     } else {
-      await addAthlete(meetId, finalTeamId, fullName.trim(), finalAgeGroup, gender);
+      await addAthlete(meetId, finalTeamId, fullName.trim(), finalAgeGroup, gender, bib.trim());
       // Запоминаем выбор для следующей регистрации в рамках этого соревнования.
       setLastAthleteDefaults(meetId, { teamId: finalTeamId, ageGroup: finalAgeGroup, gender });
     }
@@ -140,6 +150,19 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
+          <label className="field-label">Стартовый номер</label>
+          <input
+            type="text"
+            required
+            placeholder="напр. 101"
+            value={bib}
+            onChange={(e) => setBib(e.target.value)}
+            className="field num"
+            autoFocus
+          />
+        </div>
+
+        <div>
           <label className="field-label">ФИО Спортсмена</label>
           <input
             type="text"
@@ -148,7 +171,6 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             className="field"
-            autoFocus
           />
         </div>
 

@@ -15,13 +15,19 @@ import { EventConfig, Gender } from "./types";
  * официальные очки вручную — они полностью заменяют оценку.
  *
  * Место в протоколе при этом ВСЕГДА определяется по фактическому
- * результату (времени/расстоянию/очкам стрельбы), а не по этой оценке —
- * см. protocolRows() в derive.ts. Так места корректно расставляются даже
- * если у слабых участников очки минимальны или равны.
+ * результату (времени/расстоянию/очкам стрельбы/разам), а не по этой
+ * оценке — см. protocolRows() в derive.ts. Так места корректно
+ * расставляются даже если у слабых участников очки минимальны или равны.
  *
  * Анкорные значения (elite/base) ниже — расчётные ориентиры для школьного/
  * юношеского многоборья, не официальные нормативы. Отредактируйте их под
  * свою возрастную специфику при необходимости — они все в одном месте.
+ *
+ * ДИСЦИПЛИНЫ С ПРОИЗВОЛЬНОЙ ДИСТАНЦИЕЙ (лыжи, эстафета): фиксированных
+ * anchors у них нет, вместо этого задан paceAnchors — темп (сек на 1 км).
+ * Реальная дистанция вводится судьёй при создании соревнования
+ * (Meet.eventParams[eventKey].distanceMeters), а anchors на неё считаются
+ * динамически в distanceAnchor() ниже.
  */
 export const MIN_POINTS = 1;
 
@@ -77,6 +83,21 @@ export const EVENTS: EventConfig[] = [
     unitHint: "мм:сс.д, напр. 9:40.00", exponent: 1.9,
     anchors: { м: { elite: 510, base: 840 }, ж: { elite: 580, base: 960 } },
   },
+  {
+    key: "ski", name: "Бег на лыжах", cat: "track", timeFmt: "mmss",
+    unitHint: "мм:сс.д, напр. 8:45.00",
+    customDistance: true,
+    exponent: 1.9,
+    // paceAnchors — темп в сек/км, масштабируется на дистанцию из настроек
+    paceAnchors: { м: { elite: 170, base: 300 }, ж: { elite: 195, base: 340 } },
+  },
+  {
+    key: "relay", name: "Эстафета", cat: "track", timeFmt: "mmss",
+    unitHint: "мм:сс.д, напр. 1:02.30",
+    customDistance: true,
+    exponent: 1.85,
+    paceAnchors: { м: { elite: 108, base: 155 }, ж: { elite: 118, base: 170 } },
+  },
 
   // ---------------- прыжки ----------------
   {
@@ -112,6 +133,18 @@ export const EVENTS: EventConfig[] = [
     anchors: { м: { elite: 50, base: 18 }, ж: { elite: 38, base: 12 } },
   },
 
+  // ---------------- сила ----------------
+  {
+    key: "pullups", name: "Подтягивания на перекладине", cat: "strength",
+    unitHint: "раз, напр. 12", exponent: 1.15,
+    anchors: { м: { elite: 20, base: 1 }, ж: { elite: 12, base: 1 } },
+  },
+  {
+    key: "pushups", name: "Отжимания от пола", cat: "strength",
+    unitHint: "раз, напр. 25", exponent: 1.1,
+    anchors: { м: { elite: 55, base: 3 }, ж: { elite: 35, base: 2 } },
+  },
+
   // ---------------- стрельба ----------------
   // Разделена на два отдельных протокола по числу зачётных выстрелов —
   // раньше была одна дисциплина "airrifle" с произвольной длиной серии.
@@ -128,11 +161,12 @@ export const EVENTS: EventConfig[] = [
 ];
 
 /** Дисциплины, сгруппированные по типу — используется в форме создания
- *  соревнования для наглядного отображения (Бег / Прыжки / Метания / Стрельба). */
+ *  соревнования для наглядного отображения. */
 export const EVENT_GROUPS: { label: string; events: EventConfig[] }[] = [
   { label: "Бег", events: EVENTS.filter((e) => e.cat === "track") },
   { label: "Прыжки", events: EVENTS.filter((e) => e.cat === "jump") },
   { label: "Метания", events: EVENTS.filter((e) => e.cat === "throw") },
+  { label: "Сила", events: EVENTS.filter((e) => e.cat === "strength") },
   { label: "Стрельба", events: EVENTS.filter((e) => e.cat === "shooting") },
 ];
 
@@ -143,10 +177,10 @@ export function getEvent(key: string): EventConfig {
 }
 
 /** Парсит то, что судья ввёл вручную, в нормализованное число (секунды,
- *  метры или очки стрельбы). */
+ *  метры, разы или очки стрельбы). */
 export function parseResult(ev: EventConfig, raw: string): number {
   const cleaned = raw.trim().replace(",", ".");
-  if (ev.cat === "jump" || ev.cat === "throw" || ev.cat === "shooting") {
+  if (ev.cat === "jump" || ev.cat === "throw" || ev.cat === "shooting" || ev.cat === "strength") {
     return parseFloat(cleaned);
   }
   if (ev.timeFmt === "mmss" && cleaned.includes(":")) {
@@ -166,18 +200,46 @@ export function formatSeconds(sec: number): string {
   return sec.toFixed(2);
 }
 
+/** Резервная дистанция (м) для лыж/эстафеты, если по какой-то причине она
+ *  не задана в настройках соревнования — чтобы оценка очков не
+ *  превращалась в минимум у всех подряд. */
+const FALLBACK_DISTANCE: Record<string, number> = {
+  ski: 1000,
+  relay: 400,
+};
+
+/** Anchors для дисциплины с произвольной дистанцией: темп (сек/км) из
+ *  paceAnchors умножается на реальную дистанцию соревнования. */
+function distanceAnchor(
+  ev: EventConfig,
+  gender: Gender,
+  distanceMeters?: number
+): { elite: number; base: number } | undefined {
+  const pace = ev.paceAnchors?.[gender];
+  if (!pace) return undefined;
+  const meters = distanceMeters ?? FALLBACK_DISTANCE[ev.key] ?? 1000;
+  const km = meters / 1000;
+  return { elite: pace.elite * km, base: pace.base * km };
+}
+
 /** Очки для одного результата.
  *  - Стрельба: очки = сам введённый результат (это уже счёт), без формулы.
- *  - Бег/прыжки/метания: формула по опорным точкам, но с пониженным
- *    минимальным порогом — вместо 0 возвращается MIN_POINTS. */
-export function computeAutoPoints(ev: EventConfig, gender: Gender, value: number): number {
+ *  - Остальное: формула по опорным точкам (фиксированным или посчитанным
+ *    от дистанции), но с пониженным минимальным порогом — вместо 0
+ *    возвращается MIN_POINTS. */
+export function computeAutoPoints(
+  ev: EventConfig,
+  gender: Gender,
+  value: number,
+  distanceMeters?: number
+): number {
   if (Number.isNaN(value)) return 0;
 
   if (ev.cat === "shooting") {
     return Math.max(0, Math.round(value));
   }
 
-  const anchor = ev.anchors?.[gender];
+  const anchor = ev.customDistance ? distanceAnchor(ev, gender, distanceMeters) : ev.anchors?.[gender];
   if (!anchor) return 0;
 
   const C = ev.exponent ?? 1.5;
@@ -187,7 +249,7 @@ export function computeAutoPoints(ev: EventConfig, gender: Gender, value: number
     diff = anchor.base - value; // бег: меньше время — лучше
     spread = anchor.base - anchor.elite;
   } else {
-    diff = value - anchor.base; // прыжки/метания: больше — лучше
+    diff = value - anchor.base; // прыжки/метания/сила: больше — лучше
     spread = anchor.elite - anchor.base;
   }
 
@@ -199,13 +261,22 @@ export function computeAutoPoints(ev: EventConfig, gender: Gender, value: number
   return Math.max(MIN_POINTS, Math.round(A * Math.pow(diff, C)));
 }
 
-export function formulaNote(ev: EventConfig, gender: Gender, value: number, pts: number): string {
+export function formulaNote(
+  ev: EventConfig,
+  gender: Gender,
+  value: number,
+  pts: number,
+  distanceMeters?: number
+): string {
   if (ev.cat === "shooting") {
     return `Очки = введённый результат стрельбы: ${pts}.`;
   }
-  const anchor = ev.anchors?.[gender];
+  const anchor = ev.customDistance ? distanceAnchor(ev, gender, distanceMeters) : ev.anchors?.[gender];
   if (!anchor) return "";
-  const dir = ev.cat === "track" ? `${anchor.base} − результат` : `результат − ${anchor.base}`;
-  const unit = ev.cat === "track" ? "с" : "м";
-  return `Оценка: P ≈ (1000 / размах^${ev.exponent}) × (${dir})^${ev.exponent} ≈ ${pts} (минимум ${MIN_POINTS} балл, даже если результат хуже базового). Опора: элитный ${anchor.elite}${unit} → 1000, базовый ${anchor.base}${unit} → ${MIN_POINTS}.`;
+  const dir = ev.cat === "track" ? `${anchor.base.toFixed(1)} − результат` : `результат − ${anchor.base.toFixed(1)}`;
+  const unit = ev.cat === "track" ? "с" : ev.cat === "strength" ? "раз" : "м";
+  const distNote = ev.customDistance
+    ? ` Дистанция соревнования: ${distanceMeters ?? FALLBACK_DISTANCE[ev.key] ?? "?"} м.`
+    : "";
+  return `Оценка: P ≈ (1000 / размах^${ev.exponent}) × (${dir})^${ev.exponent} ≈ ${pts} (минимум ${MIN_POINTS} балл, даже если результат хуже базового). Опора: элитный ${anchor.elite.toFixed(1)}${unit} → 1000, базовый ${anchor.base.toFixed(1)}${unit} → ${MIN_POINTS}.${distNote}`;
 }

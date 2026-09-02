@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { createMeet, addTeamsBulk } from "@/lib/actions";
-import { EVENT_GROUPS } from "@/lib/scoring";
-import { EventEligibility, Gender } from "@/lib/types";
+import { EVENT_GROUPS, EVENTS } from "@/lib/scoring";
+import { EventCustomParams, EventEligibility, Gender } from "@/lib/types";
 import Button from "./ui/Button";
 import { IconChevronLeft, IconJump, IconRunning, IconShooting, IconThrow } from "./ui/icons";
 import ParallaxHero from "./ui/Parallaxhero";
@@ -19,6 +19,10 @@ interface Props {
 // дисциплины — отдельный список возрастных групп для юношей и отдельный
 // для девушек (ключ отсутствует/пуст = пол не допущен к дисциплине).
 type EligibilityDraft = Record<string, Partial<Record<Gender, string[]>>>;
+
+// Черновик параметров дисциплин с произвольной дистанцией (лыжи/эстафета) —
+// хранится строками, т.к. это поля <input type="number">.
+type CustomParamsDraft = Record<string, { distanceMeters?: string; legs?: string }>;
 
 const groupIcon: Record<string, (props: any) => JSX.Element> = {
   "Бег": IconRunning,
@@ -36,6 +40,7 @@ export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
     "2012-2013 гг.р.\n2010-2011 гг.р.\n2008-2009 гг.р."
   );
   const [eligibility, setEligibility] = useState<EligibilityDraft>({});
+  const [customParams, setCustomParams] = useState<CustomParamsDraft>({});
 
   const ageGroups = ageGroupsText
     .split("\n")
@@ -84,6 +89,10 @@ export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
     });
   }
 
+  function setCustomParam(key: string, field: "distanceMeters" | "legs", value: string) {
+    setCustomParams((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     const teams = teamsText
@@ -103,14 +112,33 @@ export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
       });
     }
 
-    if (teams.length === 0 || ageGroups.length === 0 || eventEligibility.length === 0) {
+    // Дистанция (и, для эстафеты, число этапов) для дисциплин с
+    // произвольной дистанцией — вводится судьёй здесь же, при создании.
+    const eventParams: Record<string, EventCustomParams> = {};
+    for (const eventKey of Object.keys(eligibility)) {
+      const ev = EVENTS.find((e) => e.key === eventKey);
+      if (!ev?.customDistance) continue;
+      const draft = customParams[eventKey];
+      const distanceMeters = draft?.distanceMeters ? Number(draft.distanceMeters) : undefined;
+      const legs = draft?.legs ? Number(draft.legs) : undefined;
+      if (distanceMeters) eventParams[eventKey] = { distanceMeters, ...(legs ? { legs } : {}) };
+    }
+
+    const missingDistance = Object.keys(eligibility).some((key) => {
+      const ev = EVENTS.find((e) => e.key === key);
+      return ev?.customDistance && !eventParams[key]?.distanceMeters;
+    });
+
+    if (teams.length === 0 || ageGroups.length === 0 || eventEligibility.length === 0 || missingDistance) {
       alert(
-        "Укажите хотя бы одну команду, возрастную группу и дисциплину с хотя бы одним допущенным полом и возрастной группой!"
+        missingDistance
+          ? "Укажите дистанцию (в метрах) для лыж/эстафеты — без неё оценка очков работать не будет."
+          : "Укажите хотя бы одну команду, возрастную группу и дисциплину с хотя бы одним допущенным полом и возрастной группой!"
       );
       return;
     }
 
-    const meet = await createMeet(ownerId, name, date || null, place || null, ageGroups, eventEligibility);
+    const meet = await createMeet(ownerId, name, date || null, place || null, ageGroups, eventEligibility, eventParams);
     await addTeamsBulk(meet.id, teams);
 
     if (onCreated) onCreated(meet.id);
@@ -234,6 +262,36 @@ export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
                             transition={{ duration: 0.2 }}
                             className="pl-6 space-y-3"
                           >
+                            {ev.customDistance && (
+                              <div className="flex flex-wrap gap-3 items-end">
+                                <div>
+                                  <label className="field-label !mb-1">Дистанция (метры)</label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    required
+                                    placeholder="напр. 1000"
+                                    value={customParams[ev.key]?.distanceMeters ?? ""}
+                                    onChange={(e) => setCustomParam(ev.key, "distanceMeters", e.target.value)}
+                                    className="field num !w-32"
+                                  />
+                                </div>
+                                {ev.key === "relay" && (
+                                  <div>
+                                    <label className="field-label !mb-1">Число этапов</label>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      placeholder="напр. 4"
+                                      value={customParams[ev.key]?.legs ?? ""}
+                                      onChange={(e) => setCustomParam(ev.key, "legs", e.target.value)}
+                                      className="field num !w-24"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
                             {(["м", "ж"] as Gender[]).map((g) => {
                               const genderActive = !!eligibility[ev.key]?.[g];
                               const selectedAgeGroups = eligibility[ev.key]?.[g] ?? [];

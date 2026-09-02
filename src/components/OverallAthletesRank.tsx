@@ -10,6 +10,7 @@ import { IconMedal } from "./ui/icons";
 interface AthleteScore {
   athleteId: string;
   fullName: string;
+  bib: string | null;
   teamName: string;
   ageGroup: string;
   gender: string;
@@ -67,6 +68,7 @@ export default function OverallAthletesRank({ meetId }: { meetId: string }) {
       athleteScores[key] = {
         athleteId: e.athleteId,
         fullName: athlete.fullName,
+        bib: athlete.bib,
         teamName: teamMap.get(e.teamId) ?? "—",
         ageGroup: e.ageGroup,
         gender: e.gender,
@@ -118,6 +120,7 @@ export default function OverallAthletesRank({ meetId }: { meetId: string }) {
               <thead className="text-muted font-bold border-b border-white/10 text-[10px] uppercase tracking-wide">
                 <tr>
                   <th className="py-1 w-8">№</th>
+                  <th className="py-1 w-14">Номер</th>
                   <th className="py-1">Спортсмен</th>
                   <th className="py-1 text-center">Видов</th>
                   <th className="py-1 text-right">Сумма</th>
@@ -127,6 +130,7 @@ export default function OverallAthletesRank({ meetId }: { meetId: string }) {
                 {athletesList.map((ath, idx) => (
                   <tr key={`${ath.athleteId}_${idx}`}>
                     <td className="py-2 font-bold num text-muted">{idx + 1}</td>
+                    <td className="py-2 num text-muted">{ath.bib ?? "—"}</td>
                     <td className="py-2 font-medium">
                       <div>{ath.fullName}</div>
                       <div className="text-[10px] text-muted">{ath.teamName}</div>

@@ -82,6 +82,7 @@ export default function AthletesList({ meetId }: { meetId: string }) {
         <table className="w-full text-left text-xs">
           <thead className="sticky top-0 bg-[var(--surface)] border-b border-white/10 text-muted uppercase font-bold text-[10px] tracking-wide">
             <tr>
+              <th className="py-2 w-14">№</th>
               <th className="py-2">ФИО</th>
               <th className="py-2">Команда</th>
               <th className="py-2">Категория</th>
@@ -100,6 +101,7 @@ export default function AthletesList({ meetId }: { meetId: string }) {
                   transition={{ duration: 0.2, delay: Math.min(idx * 0.02, 0.3) }}
                   className="group hover:bg-white/[0.04] transition-colors"
                 >
+                  <td className="py-2 num font-bold text-track align-top">{a.bib ?? "—"}</td>
                   <td className="py-2 font-medium align-top">{a.fullName}</td>
                   <td className="py-2 text-[var(--ink)]/80 align-top">{teamName(a.teamId)}</td>
                   <td className="py-2 align-top">

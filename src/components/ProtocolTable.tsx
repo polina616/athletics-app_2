@@ -43,6 +43,8 @@ function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
       ? STATUS_LABELS[entry.status]
       : eventConfig.cat === "track"
       ? formatSeconds(entry.resultSeconds ?? NaN)
+      : eventConfig.cat === "strength"
+      ? `${entry.resultSeconds} раз`
       : `${entry.resultSeconds} м`
     : "—";
   const pts = entry ? pointsForEntry(entry).pts : null;
@@ -73,6 +75,7 @@ function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
     return (
       <tr className="bg-track/5">
         <td className="py-1.5 font-bold num text-muted">{place ?? "—"}</td>
+        <td className="py-1.5 num text-muted">{athlete.bib ?? "—"}</td>
         <td className="py-1.5 font-medium">{athlete.fullName}</td>
         <td className="py-1.5" colSpan={2}>
           <div className="flex items-center gap-1.5">
@@ -128,6 +131,7 @@ function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
           "—"
         )}
       </td>
+      <td className="py-1.5 num text-muted">{athlete.bib ?? "—"}</td>
       <td className="py-1.5 font-medium">{athlete.fullName}</td>
       <td
         onClick={() => setEditing(true)}
@@ -248,6 +252,8 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
 
   const hasAnyAthletes = categoryTables.some((c) => c.rows.length > 0);
 
+  const distanceParams = eventConfig.customDistance ? meet.eventParams?.[eventKey] : undefined;
+
   return (
     <div className="space-y-4 card-flat p-5 rounded-xl print:border-none print:p-0 print:bg-white print:text-black">
       <div className="flex items-center justify-between border-b border-white/10 pb-3 print:border-b-2 print:border-black">
@@ -256,7 +262,14 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
             {meet.name} • {meet.date} ({meet.place})
           </div>
           <div className="eyebrow print:hidden mb-1">Протокол дисциплины</div>
-          <h3 className="text-2xl font-display tracking-wide print:text-2xl print:font-sans">{eventConfig.name}</h3>
+          <h3 className="text-2xl font-display tracking-wide print:text-2xl print:font-sans">
+            {eventConfig.name}
+            {distanceParams?.distanceMeters && (
+              <span className="text-sm text-muted num ml-2">
+                ({distanceParams.distanceMeters} м{eventKey === "relay" && distanceParams.legs ? `, ${distanceParams.legs} этапа` : ""})
+              </span>
+            )}
+          </h3>
           <p className="text-[11px] text-muted print:hidden mt-1">
             Нажмите на результат в таблице, чтобы ввести или изменить его.
           </p>
@@ -291,7 +304,8 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="text-muted print:text-black font-bold border-b border-white/10 print:border-black text-[10px] uppercase tracking-wide">
                     <tr>
-                      <th className="py-1 w-8">№</th>
+                      <th className="py-1 w-8">Место</th>
+                      <th className="py-1 w-12">№</th>
                       <th className="py-1">Спортсмен</th>
                       <th className="py-1">Рез-т</th>
                       <th className="py-1 text-right">Очки</th>
