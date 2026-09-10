@@ -92,10 +92,7 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!fullName.trim()) return;
-    if (!bib.trim()) {
-      alert("Укажите стартовый номер спортсмена.");
-      return;
-    }
+    
 
     const finalTeamId = teamId || teamsList[0]?.id;
     const finalAgeGroup = ageGroup || meet?.ageGroups?.[0];
@@ -115,10 +112,10 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
         teamId: finalTeamId,
         ageGroup: finalAgeGroup,
         gender,
-        bib: bib.trim(),
+        bib: bib.trim() || null,
       });
     } else {
-      await addAthlete(meetId, finalTeamId, fullName.trim(), finalAgeGroup, gender, bib.trim());
+      await addAthlete(meetId, finalTeamId, fullName.trim(), finalAgeGroup, gender, bib.trim() || null);
       // Запоминаем выбор для следующей регистрации в рамках этого соревнования.
       setLastAthleteDefaults(meetId, { teamId: finalTeamId, ageGroup: finalAgeGroup, gender });
     }
@@ -153,8 +150,7 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
           <label className="field-label">Стартовый номер</label>
           <input
             type="text"
-            required
-            placeholder="напр. 101"
+            placeholder="можно оставить пустым — присвоите позже"
             value={bib}
             onChange={(e) => setBib(e.target.value)}
             className="field num"
