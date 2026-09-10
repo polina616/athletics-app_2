@@ -59,6 +59,7 @@ export default function BulkAthleteImport({ meetId, isOpen, onClose }: Props) {
   if (!isOpen || !meet) return null;
 
   const teamsList = teams ?? [];
+  const teamsList = [...(teams ?? [])].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   const parsed = parseLines(linesText);
   const validLines = parsed.filter((p) => p.valid);
   const invalidLines = parsed.filter((p) => !p.valid);
