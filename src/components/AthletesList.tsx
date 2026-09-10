@@ -1,16 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
-import { deleteAthlete } from "@/lib/actions";
+import { deleteAthlete, updateAthlete } from "@/lib/actions";
 import { getEvent } from "@/lib/scoring";
 import { Athlete } from "@/lib/types";
 import AthleteModal from "./AthleteModal";
 import EmptyState from "./ui/EmptyState";
 import { IconUsers } from "./ui/icons";
 
+function BibCell({ athlete, meetId }: { athlete: Athlete; meetId: string }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(athlete.bib ?? "");
+
+  useEffect(() => setValue(athlete.bib ?? ""), [athlete.bib]);
+
+  async function save() {
+    await updateAthlete(athlete.id, meetId, { bib: value.trim() || null });
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && save()}
+        onBlur={save}
+        className="field !py-0.5 !px-1.5 !text-[11px] num w-16"
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className={`num font-bold hover:underline ${athlete.bib ? "text-track" : "text-gold italic"}`}
+      title="Нажмите, чтобы присвоить/изменить номер"
+    >
+      {athlete.bib ?? "назначить"}
+    </button>
+  );
+}
 export default function AthletesList({ meetId }: { meetId: string }) {
   const [editingAthlete, setEditingAthlete] = useState<Athlete | null>(null);
 
@@ -101,7 +136,7 @@ export default function AthletesList({ meetId }: { meetId: string }) {
                   transition={{ duration: 0.2, delay: Math.min(idx * 0.02, 0.3) }}
                   className="group hover:bg-white/[0.04] transition-colors"
                 >
-                  <td className="py-2 num font-bold text-track align-top">{a.bib ?? "—"}</td>
+                  <td className="py-2 align-top"><BibCell athlete={a} meetId={meetId} /></td>
                   <td className="py-2 font-medium align-top">{a.fullName}</td>
                   <td className="py-2 text-[var(--ink)]/80 align-top">{teamName(a.teamId)}</td>
                   <td className="py-2 align-top">
