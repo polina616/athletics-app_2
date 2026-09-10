@@ -30,10 +30,13 @@ function parseLines(text: string): ParsedLine[] {
     .filter(Boolean)
     .map((raw) => {
       const idx = raw.indexOf(",");
-      if (idx === -1) return { raw, bib: "", fullName: raw, valid: false };
+      if (idx === -1) {
+        // без запятой — считаем всю строку ФИО, номер не задан
+        return { raw, bib: "", fullName: raw, valid: !!raw };
+      }
       const bib = raw.slice(0, idx).trim();
       const fullName = raw.slice(idx + 1).trim();
-      return { raw, bib, fullName, valid: !!bib && !!fullName };
+      return { raw, bib, fullName, valid: !!fullName };
     });
 }
 
@@ -73,7 +76,7 @@ export default function BulkAthleteImport({ meetId, isOpen, onClose }: Props) {
         finalTeamId,
         finalAgeGroup,
         gender,
-        validLines.map((l) => ({ bib: l.bib, fullName: l.fullName }))
+        validLines.map((l) => ({ bib: l.bib || null, fullName: l.fullName }))
       );
       setLinesText("");
       onClose();
@@ -149,7 +152,7 @@ export default function BulkAthleteImport({ meetId, isOpen, onClose }: Props) {
             )}
             {invalidLines.length > 0 && (
               <p className="text-[11px] num text-gold">
-                Не распознано строк: {invalidLines.length} (нужен формат "номер, ФИО")
+                Не распознано строк: {invalidLines.length} (нужно хотя бы ФИО)
               </p>
             )}
           </div>
