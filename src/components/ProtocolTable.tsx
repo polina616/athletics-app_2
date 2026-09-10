@@ -10,6 +10,7 @@ import { saveResultInline, deleteEntry } from "@/lib/actions";
 import { Athlete, Entry, Gender, ResultStatus, STATUS_LABELS } from "@/lib/types";
 import EmptyState from "./ui/EmptyState";
 import Button from "./ui/Button";
+import Modal from "./ui/Modal";
 
 const medalClass = (place: number) =>
   place === 1
@@ -177,9 +178,14 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
     [meetId]
   );
 
+  // Развёрнутый вид: тот же протокол, но в модалке почти на весь экран —
+  // удобнее вводить результаты, чем в узкой колонке дашборда.
+  const [expanded, setExpanded] = useState(false);
+
   const handlePrint = () => window.print();
 
-    if (!meet || !entries || !athletes) return <div className="skeleton h-48 rounded-xl2" />;
+  if (!meet || !entries || !athletes) return <div className="skeleton h-48 rounded-xl2" />;
+
 
   // Дисциплина может быть допущена раздельно для юношей и девушек со
   // своими возрастными группами (см. MeetSetup) — тогда для одного
@@ -254,86 +260,124 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
 
   const distanceParams = eventConfig.customDistance ? meet.eventParams?.[eventKey] : undefined;
 
-  return (
-    <div className="space-y-4 card-flat p-5 rounded-xl print:border-none print:p-0 print:bg-white print:text-black">
-      <div className="flex items-center justify-between border-b border-white/10 pb-3 print:border-b-2 print:border-black">
-        <div>
-          <div className="hidden print:block text-xs uppercase font-bold text-gray-600">
-            {meet.name} • {meet.date} ({meet.place})
+  function renderProtocol(isModal: boolean) {
+    return (
+      <div
+        className={`space-y-4 ${isModal ? "" : "card-flat p-5 rounded-xl"} print:border-none print:p-0 print:bg-white print:text-black`}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 pb-3 print:border-b-2 print:border-black">
+          <div>
+            <div className="hidden print:block text-xs uppercase font-bold text-gray-600">
+              {meet.name} • {meet.date} ({meet.place})
+            </div>
+            <div className="eyebrow print:hidden mb-1">Протокол дисциплины</div>
+            <h3 className="text-2xl font-display tracking-wide print:text-2xl print:font-sans">
+              {eventConfig.name}
+              {distanceParams?.distanceMeters && (
+                <span className="text-sm text-muted num ml-2">
+                  ({distanceParams.distanceMeters} м{eventKey === "relay" && distanceParams.legs ? `, ${distanceParams.legs} этапа` : ""})
+                </span>
+              )}
+            </h3>
+            <p className="text-[11px] text-muted print:hidden mt-1">
+              Нажмите на результат в таблице, чтобы ввести или изменить его.
+            </p>
           </div>
-          <div className="eyebrow print:hidden mb-1">Протокол дисциплины</div>
-          <h3 className="text-2xl font-display tracking-wide print:text-2xl print:font-sans">
-            {eventConfig.name}
-            {distanceParams?.distanceMeters && (
-              <span className="text-sm text-muted num ml-2">
-                ({distanceParams.distanceMeters} м{eventKey === "relay" && distanceParams.legs ? `, ${distanceParams.legs} этапа` : ""})
-              </span>
+
+          <div className="flex items-center gap-2 print:hidden">
+            {!isModal && (
+              <Button variant="secondary" onClick={() => setExpanded(true)}>
+                ⛶ Развернуть
+              </Button>
             )}
-          </h3>
-          <p className="text-[11px] text-muted print:hidden mt-1">
-            Нажмите на результат в таблице, чтобы ввести или изменить его.
-          </p>
+            <Button variant="secondary" onClick={handlePrint}>
+              🖨 Печать / PDF
+            </Button>
+            {isModal && (
+              <Button variant="secondary" onClick={() => setExpanded(false)}>
+                ✕ Свернуть
+              </Button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 print:hidden">
-          <Button variant="secondary" onClick={handlePrint}>
-            🖨 Печать / PDF
+        {!hasAnyAthletes ? (
+          <EmptyState
+            title="Нет допущенных спортсменов"
+            description="Зарегистрируйте участников нужного возраста и пола, допущенных к этой дисциплине."
+          />
+        ) : (
+          <div
+            className={`grid grid-cols-1 ${isModal ? "md:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-2"} print:grid-cols-1 gap-6`}
+          >
+            {categoryTables.map(({ ag, g, rows }) => {
+              if (rows.length === 0) return null;
+              const genderLabel = g === "м" ? "Юноши" : "Девушки";
+              return (
+                <div
+                  key={`${ag}_${g}`}
+                  className="border border-white/10 print:border-black rounded-lg p-3 surface-inset print:bg-transparent space-y-2"
+                >
+                  <div className="eyebrow text-blue print:text-black print:normal-case border-b border-white/10 print:border-black pb-1 mb-2">
+                    Категория: {ag} • {genderLabel}
+                  </div>
+
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="text-muted print:text-black font-bold border-b border-white/10 print:border-black text-[10px] uppercase tracking-wide">
+                      <tr>
+                        <th className="py-1 w-8">Место</th>
+                        <th className="py-1 w-12">№</th>
+                        <th className="py-1">Спортсмен</th>
+                        <th className="py-1">Рез-т</th>
+                        <th className="py-1 text-right">Очки</th>
+                        <th className="py-1 w-10 print:hidden"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {rows.map(({ athlete, entry, place }) => (
+                        <ResultRow key={athlete.id} meetId={meetId} eventKey={eventKey} athlete={athlete} entry={entry} place={place} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="hidden print:flex justify-between items-end pt-12 text-xs font-bold">
+          <div>
+            <div className="border-b border-black w-48 mb-1"></div>
+            <div>Главный судья</div>
+          </div>
+          <div>
+            <div className="border-b border-black w-48 mb-1"></div>
+            <div>Главный секретарь</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {expanded ? (
+        <div className="card-flat p-5 rounded-xl flex items-center justify-between">
+          <div>
+            <div className="eyebrow mb-1">Протокол открыт в развёрнутом окне</div>
+            <h3 className="text-lg font-display tracking-wide">{eventConfig.name}</h3>
+          </div>
+          <Button variant="secondary" onClick={() => setExpanded(false)}>
+            Свернуть
           </Button>
         </div>
-      </div>
-
-      {!hasAnyAthletes ? (
-        <EmptyState
-          title="Нет допущенных спортсменов"
-          description="Зарегистрируйте участников нужного возраста и пола, допущенных к этой дисциплине."
-        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-1 gap-6">
-          {categoryTables.map(({ ag, g, rows }) => {
-            if (rows.length === 0) return null;
-            const genderLabel = g === "м" ? "Юноши" : "Девушки";
-            return (
-              <div
-                key={`${ag}_${g}`}
-                className="border border-white/10 print:border-black rounded-lg p-3 surface-inset print:bg-transparent space-y-2"
-              >
-                <div className="eyebrow text-blue print:text-black print:normal-case border-b border-white/10 print:border-black pb-1 mb-2">
-                  Категория: {ag} • {genderLabel}
-                </div>
-
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="text-muted print:text-black font-bold border-b border-white/10 print:border-black text-[10px] uppercase tracking-wide">
-                    <tr>
-                      <th className="py-1 w-8">Место</th>
-                      <th className="py-1 w-12">№</th>
-                      <th className="py-1">Спортсмен</th>
-                      <th className="py-1">Рез-т</th>
-                      <th className="py-1 text-right">Очки</th>
-                      <th className="py-1 w-10 print:hidden"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {rows.map(({ athlete, entry, place }) => (
-                      <ResultRow key={athlete.id} meetId={meetId} eventKey={eventKey} athlete={athlete} entry={entry} place={place} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })}
-        </div>
+        renderProtocol(false)
       )}
 
-      <div className="hidden print:flex justify-between items-end pt-12 text-xs font-bold">
-        <div>
-          <div className="border-b border-black w-48 mb-1"></div>
-          <div>Главный судья</div>
-        </div>
-        <div>
-          <div className="border-b border-black w-48 mb-1"></div>
-          <div>Главный секретарь</div>
-        </div>
-      </div>
-    </div>
+      <Modal isOpen={expanded} onClose={() => setExpanded(false)} maxWidthClass="max-w-[96vw]">
+        {expanded && <div className="max-h-[88vh] overflow-y-auto pr-1">{renderProtocol(true)}</div>}
+      </Modal>
+    </>
   );
 }
