@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
@@ -165,7 +165,6 @@ function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
     </motion.tr>
   );
 }
-
 export default function ProtocolTable({ meetId, eventKey }: { meetId: string; eventKey: string }) {
   const eventConfig = getEvent(eventKey);
   const meet = useLiveQuery(() => db.meets.get(meetId), [meetId]);
@@ -178,9 +177,15 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
     [meetId]
   );
 
-  // Развёрнутый вид: тот же протокол, но в модалке почти на весь экран —
-  // удобнее вводить результаты, чем в узкой колонке дашборда.
   const [expanded, setExpanded] = useState(false);
+
+  // Поиск по ФИО/номеру внутри протокола — чтобы найти спортсмена и
+  // ввести результат, не листая всю категорию вручную. Сбрасывается при
+  // смене дисциплины, т.к. компонент переиспользуется между вкладками.
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    setSearch("");
+  }, [eventKey]);
 
   const handlePrint = () => window.print();
 
@@ -260,6 +265,19 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
 
   const distanceParams = eventConfig.customDistance ? meet.eventParams?.[eventKey] : undefined;
 
+  const q = search.trim().toLowerCase();
+  const matchesQuery = (a: Athlete) =>
+    !q || a.fullName.toLowerCase().includes(q) || (a.bib ?? "").toLowerCase().includes(q);
+
+  // Применяем фильтр к уже посчитанным рядам категорий: сохраняем места и
+  // сортировку как есть, просто убираем строки без совпадения. Категории
+  // без единого совпадения при активном поиске не отрисовываем вовсе.
+  const filteredCategoryTables = categoryTables
+    .map((cat) => ({ ...cat, rows: cat.rows.filter(({ athlete }) => matchesQuery(athlete)) }))
+    .filter((cat) => !q || cat.rows.length > 0);
+
+  const totalMatches = q ? filteredCategoryTables.reduce((s, c) => s + c.rows.length, 0) : null;
+
   function renderProtocol(isModal: boolean) {
     return (
       <div
@@ -301,6 +319,23 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
           </div>
         </div>
 
+        {hasAnyAthletes && (
+          <div className="print:hidden space-y-1">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Поиск спортсмена по фамилии, имени или номеру..."
+              className="field !text-xs"
+            />
+            {q && (
+              <p className="text-[11px] text-muted num">
+                {totalMatches ? `Найдено: ${totalMatches}` : "Ничего не найдено по этому запросу."}
+              </p>
+            )}
+          </div>
+        )}
+
         {!hasAnyAthletes ? (
           <EmptyState
             title="Нет допущенных спортсменов"
@@ -310,7 +345,7 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
           <div
             className={`grid grid-cols-1 ${isModal ? "md:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-2"} print:grid-cols-1 gap-6`}
           >
-            {categoryTables.map(({ ag, g, rows }) => {
+            {filteredCategoryTables.map(({ ag, g, rows }) => {
               if (rows.length === 0) return null;
               const genderLabel = g === "м" ? "Юноши" : "Девушки";
               return (
