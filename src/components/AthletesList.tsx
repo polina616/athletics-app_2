@@ -93,14 +93,13 @@ export default function AthletesList({ meetId }: { meetId: string }) {
 
   // Команда → возрастная группа → пол → ФИО — читается как бумажная заявка.
   const sorted = [...athletes].sort((a, b) => {
-    const teamCmp = teamName(a.teamId).localeCompare(teamName(b.teamId), "ru");
-    if (teamCmp !== 0) return teamCmp;
-    const ageCmp = a.ageGroup.localeCompare(b.ageGroup, "ru");
-    if (ageCmp !== 0) return ageCmp;
-    const genderCmp = a.gender.localeCompare(b.gender, "ru");
-    if (genderCmp !== 0) return genderCmp;
-    return a.fullName.localeCompare(b.fullName, "ru");
-  });
+  if (a.gender !== b.gender) return a.gender === "м" ? -1 : 1;
+  const teamCmp = teamName(a.teamId).localeCompare(teamName(b.teamId), "ru");
+  if (teamCmp !== 0) return teamCmp;
+  const ageCmp = a.ageGroup.localeCompare(b.ageGroup, "ru");
+  if (ageCmp !== 0) return ageCmp;
+  return a.fullName.localeCompare(b.fullName, "ru");
+});
 
   return (
     <div className="card-flat p-5 rounded-xl space-y-4">
