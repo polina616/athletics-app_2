@@ -317,6 +317,27 @@ export async function setEventEligibility(
   await db.meets.put({ ...meet, eventEligibility, updatedAt: nowIso(), dirty: true });
   kickSync(meetId);
 }
+export async function setEventEligibilityByGender(
+  meetId: string,
+  eventKey: string,
+  byGender: Partial<Record<Gender, string[]>>
+): Promise<void> {
+  const meet = await db.meets.get(meetId);
+  if (!meet) return;
+
+  const rest = meet.eventEligibility.filter((el) => el.eventKey !== eventKey);
+  const additions: EventEligibility[] = (Object.keys(byGender) as Gender[])
+    .filter((g) => (byGender[g]?.length ?? 0) > 0)
+    .map((g) => ({ eventKey, ageGroups: byGender[g]!, genders: [g] }));
+
+  await db.meets.put({
+    ...meet,
+    eventEligibility: [...rest, ...additions],
+    updatedAt: nowIso(),
+    dirty: true,
+  });
+  kickSync(meetId);
+}
 
 /** Дистанция/этапы для лыж и эстафеты — задаётся при создании, но можно
  *  поправить и позже через настройки соревнования. */
