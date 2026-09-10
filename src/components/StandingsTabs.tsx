@@ -36,7 +36,7 @@ export default function StandingsTabs({ meetId }: { meetId: string }) {
     return <div className="skeleton h-64 rounded-xl2" />;
   }
 
-  const eventKeys = meet.eventEligibility.map((el) => el.eventKey);
+  const eventKeys = Array.from(new Set(meet.eventEligibility.map((el) => el.eventKey)));
   const currentEvent = selectedEvent && eventKeys.includes(selectedEvent) ? selectedEvent : eventKeys[0];
   const allAroundByCategory = personalAllAround(entries, athletes, teams);
 
