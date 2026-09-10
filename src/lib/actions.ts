@@ -344,7 +344,8 @@ export async function addAthletesBulk(
   entries: { bib: string | null; fullName: string }[]
 ): Promise<number> {
   const athletes: Athlete[] = entries
-    .map((e) => ({ bib: e.bib.trim() || null, fullName: e.fullName.trim() }))
+    // Безопасный вызов trim через оператор ?. на случай если bib равен null
+    .map((e) => ({ bib: e.bib?.trim() || null, fullName: e.fullName.trim() }))
     .filter((e) => e.fullName)
     .map(({ bib, fullName }) => ({
       id: uuid(),
