@@ -23,6 +23,12 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
     () => db.teams.where({ meetId }).filter((t) => !t.deleted).toArray(),
     [meetId]
   );
+  // Нужен для проверки на дубликат при регистрации нового спортсмена.
+  const athletes = useLiveQuery(
+    () => db.athletes.where({ meetId }).filter((a) => !a.deleted).toArray(),
+    [meetId]
+  );
+
 
   // Последние выбранные команда/возраст/пол для ЭТОГО соревнования — судья
   // обычно регистрирует несколько спортсменов подряд из одной команды и
@@ -92,7 +98,6 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!fullName.trim()) return;
-    
 
     const finalTeamId = teamId || teamsList[0]?.id;
     const finalAgeGroup = ageGroup || meet?.ageGroups?.[0];
@@ -106,6 +111,23 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
       return;
     }
 
+    // Проверка на дубликат — только при создании нового, при редактировании
+    // спортсмен сам может встретить своё же старое имя в списке.
+    if (!editingAthlete) {
+      const normalized = fullName.trim().toLowerCase();
+      const duplicate = athletes?.find(
+        (a) => a.teamId === finalTeamId && a.fullName.trim().toLowerCase() === normalized
+      );
+      if (duplicate) {
+        const proceed = confirm(
+          `Спортсмен «${duplicate.fullName}» уже добавлен в команду «${teamName(finalTeamId)}»${
+            duplicate.bib ? ` (№${duplicate.bib})` : ""
+          }. Всё равно зарегистрировать ещё раз?`
+        );
+        if (!proceed) return;
+      }
+    }
+
     if (editingAthlete) {
       await updateAthlete(editingAthlete.id, meetId, {
         fullName: fullName.trim(),
@@ -116,11 +138,13 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
       });
     } else {
       await addAthlete(meetId, finalTeamId, fullName.trim(), finalAgeGroup, gender, bib.trim() || null);
-      // Запоминаем выбор для следующей регистрации в рамках этого соревнования.
       setLastAthleteDefaults(meetId, { teamId: finalTeamId, ageGroup: finalAgeGroup, gender });
     }
 
     onClose();
+  }
+  function teamName(id: string) {
+    return teams?.find((t) => t.id === id)?.name ?? "—";
   }
 
   if (teamsList.length === 0) {
