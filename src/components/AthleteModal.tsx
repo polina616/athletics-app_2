@@ -93,7 +93,7 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
     );
   }
 
-  const teamsList = teams ?? [];
+ 
   const teamsList = [...(teams ?? [])].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
