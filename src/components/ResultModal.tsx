@@ -64,9 +64,18 @@ export default function ResultModal({ meetId, eventKey, isOpen, onClose }: Props
   const teamName = (id: string) => teams?.find((t) => t.id === id)?.name ?? "—";
 
   const [athleteId, setAthleteId] = useState("");
+  const [search, setSearch] = useState("");
   const [resultRaw, setResultRaw] = useState("");
   const [status, setStatus] = useState<ResultStatus | null>(null);
 
+
+  const searchedAthletes = useMemo(() => {
+  const q = search.trim().toLowerCase();
+  if (!q) return filteredAthletes;
+  return filteredAthletes.filter(
+    (a) => a.fullName.toLowerCase().includes(q) || (a.bib ?? "").toLowerCase().includes(q)
+  );
+}, [filteredAthletes, search]);
   if (!isOpen || !meet) return null;
 
   const eventConfig = getEvent(eventKey);
@@ -98,24 +107,34 @@ export default function ResultModal({ meetId, eventKey, isOpen, onClose }: Props
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className="field-label">Спортсмен</label>
-          <select required value={athleteId} onChange={(e) => setAthleteId(e.target.value)} className="field">
-            <option value="">-- выберите спортсмена --</option>
-            {filteredAthletes.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.bib ? `№${a.bib} — ` : ""}
-                {a.fullName} ({teamName(a.teamId)}, {a.ageGroup}, {a.gender === "м" ? "Ю" : "Д"})
-              </option>
-            ))}
-          </select>
+  <label className="field-label">Спортсмен</label>
+  <input
+    type="text"
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    placeholder="Поиск по фамилии или номеру..."
+    className="field !text-xs mb-1.5"
+  />
+  <select required value={athleteId} onChange={(e) => setAthleteId(e.target.value)} className="field">
+    <option value="">-- выберите спортсмена --</option>
+    {searchedAthletes.map((a) => (
+      <option key={a.id} value={a.id}>
+        {a.bib ? `№${a.bib} — ` : ""}
+        {a.fullName} ({teamName(a.teamId)}, {a.ageGroup}, {a.gender === "м" ? "Ю" : "Д"})
+      </option>
+    ))}
+  </select>
 
-          {filteredAthletes.length === 0 && (
-            <p className="text-[11px] text-gold mt-1.5">
-              {athletes && athletes.length > 0
-                ? "Все спортсмены в этой категории уже имеют результат в данной дисциплине."
-                : "Нет спортсменов, допущенных к этой дисциплине (проверьте пол/возраст, заданные при создании соревнования, либо зарегистрируйте спортсмена нужной категории)."}
-            </p>
-          )}
+  {search.trim() && filteredAthletes.length > 0 && searchedAthletes.length === 0 && (
+    <p className="text-[11px] text-gold mt-1.5">Ничего не найдено по «{search}».</p>
+  )}
+
+  {filteredAthletes.length === 0 && (
+    <p className="text-[11px] text-gold mt-1.5">
+      {athletes && athletes.length > 0
+        ? "Все спортсмены в этой категории уже имеют результат в данной дисциплине."
+        : "Нет спортсменов, допущенных к этой дисциплине..."}
+    </p>
 
           {existingEntries && existingEntries.length > 0 && (
             <p className="text-[10px] num text-muted mt-1.5">Уже внесено результатов: {existingEntries.length}</p>
