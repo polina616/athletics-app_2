@@ -116,7 +116,7 @@ export async function addAthlete(
   fullName: string,
   ageGroup: AgeGroup,
   gender: Gender,
-  bib: string
+  bib: string | null
 ): Promise<Athlete> {
   const athlete: Athlete = {
     id: uuid(),
@@ -125,7 +125,7 @@ export async function addAthlete(
     fullName: fullName.trim(),
     ageGroup,
     gender,
-    bib: bib.trim(),
+    bib: bib.trim() || null,
     createdAt: nowIso(),
     updatedAt: nowIso(),
     deleted: false,
@@ -341,11 +341,11 @@ export async function addAthletesBulk(
   teamId: string,
   ageGroup: AgeGroup,
   gender: Gender,
-  entries: { bib: string; fullName: string }[]
+  entries: { bib: string | null; fullName: string }[]
 ): Promise<number> {
   const athletes: Athlete[] = entries
-    .map((e) => ({ bib: e.bib.trim(), fullName: e.fullName.trim() }))
-    .filter((e) => e.bib && e.fullName)
+    .map((e) => ({ bib: e.bib.trim() || null, fullName: e.fullName.trim() }))
+    .filter((e) => e.fullName)
     .map(({ bib, fullName }) => ({
       id: uuid(),
       meetId,
