@@ -49,6 +49,10 @@ export default function BulkAthleteImport({ meetId, isOpen, onClose }: Props) {
     () => db.teams.where({ meetId }).filter((t) => !t.deleted).toArray(),
     [meetId]
   );
+  const athletes = useLiveQuery(
+    () => db.athletes.where({ meetId }).filter((a) => !a.deleted).toArray(),
+    [meetId]
+  );
 
   const [teamId, setTeamId] = useState("");
   const [ageGroup, setAgeGroup] = useState("");
@@ -58,17 +62,35 @@ export default function BulkAthleteImport({ meetId, isOpen, onClose }: Props) {
 
   if (!isOpen || !meet) return null;
 
-  const teamsList = teams ?? [];
   const teamsList = [...(teams ?? [])].sort((a, b) => a.name.localeCompare(b.name, "ru"));
+  const finalTeamIdPreview = teamId || teamsList[0]?.id;
+
   const parsed = parseLines(linesText);
   const validLines = parsed.filter((p) => p.valid);
   const invalidLines = parsed.filter((p) => !p.valid);
+
+  // Строки, ФИО из которых уже есть в выбранной команде — предупреждаем,
+  // но не блокируем: возможны полные тёзки, судья решает сам.
+  const existingNamesInTeam = new Set(
+    (athletes ?? [])
+      .filter((a) => a.teamId === finalTeamIdPreview)
+      .map((a) => a.fullName.trim().toLowerCase())
+  );
+  const duplicateLines = validLines.filter((l) => existingNamesInTeam.has(l.fullName.trim().toLowerCase()));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const finalTeamId = teamId || teamsList[0]?.id;
     const finalAgeGroup = ageGroup || meet?.ageGroups?.[0];
     if (!finalTeamId || !finalAgeGroup || validLines.length === 0) return;
+
+    if (duplicateLines.length > 0) {
+      const names = duplicateLines.map((l) => l.fullName).join(", ");
+      const proceed = confirm(
+        `Уже есть в этой команде: ${names}. Всё равно добавить всех (включая повторы)?`
+      );
+      if (!proceed) return;
+    }
 
     setSaving(true);
     try {
@@ -136,8 +158,7 @@ export default function BulkAthleteImport({ meetId, isOpen, onClose }: Props) {
             <option value="ж">Девушки (ж)</option>
           </select>
         </div>
-
-        <div>
+<div>
           <label className="field-label">Номер и ФИО (по одному участнику на строку, формат: "номер, ФИО")</label>
           <textarea
             rows={8}
@@ -157,6 +178,11 @@ export default function BulkAthleteImport({ meetId, isOpen, onClose }: Props) {
               </p>
             )}
           </div>
+          {duplicateLines.length > 0 && (
+            <p className="text-[11px] text-gold mt-1">
+              Уже есть в команде: {duplicateLines.map((l) => l.fullName).join(", ")}
+            </p>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
