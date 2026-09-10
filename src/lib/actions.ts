@@ -125,7 +125,7 @@ export async function addAthlete(
     fullName: fullName.trim(),
     ageGroup,
     gender,
-    bib: bib.trim() || null,
+    bib: bib?.trim() || null,
     createdAt: nowIso(),
     updatedAt: nowIso(),
     deleted: false,
