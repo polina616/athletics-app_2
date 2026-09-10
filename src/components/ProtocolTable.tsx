@@ -190,7 +190,7 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
   const handlePrint = () => window.print();
 
   if (!meet || !entries || !athletes) return <div className="skeleton h-48 rounded-xl2" />;
-
+  const currentMeet = meet;
 
   // Дисциплина может быть допущена раздельно для юношей и девушек со
   // своими возрастными группами (см. MeetSetup) — тогда для одного
@@ -286,7 +286,7 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
         <div className="flex items-center justify-between border-b border-white/10 pb-3 print:border-b-2 print:border-black">
           <div>
             <div className="hidden print:block text-xs uppercase font-bold text-gray-600">
-              {meet.name} • {meet.date} ({meet.place})
+                            {currentMeet.name} • {currentMeet.date} ({currentMeet.place})
             </div>
             <div className="eyebrow print:hidden mb-1">Протокол дисциплины</div>
             <h3 className="text-2xl font-display tracking-wide print:text-2xl print:font-sans">
