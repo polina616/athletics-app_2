@@ -68,14 +68,14 @@ export default function ResultModal({ meetId, eventKey, isOpen, onClose }: Props
   const [resultRaw, setResultRaw] = useState("");
   const [status, setStatus] = useState<ResultStatus | null>(null);
 
-
   const searchedAthletes = useMemo(() => {
-  const q = search.trim().toLowerCase();
-  if (!q) return filteredAthletes;
-  return filteredAthletes.filter(
-    (a) => a.fullName.toLowerCase().includes(q) || (a.bib ?? "").toLowerCase().includes(q)
-  );
-}, [filteredAthletes, search]);
+    const q = search.trim().toLowerCase();
+    if (!q) return filteredAthletes;
+    return filteredAthletes.filter(
+      (a) => a.fullName.toLowerCase().includes(q) || (a.bib ?? "").toLowerCase().includes(q)
+    );
+  }, [filteredAthletes, search]);
+
   if (!isOpen || !meet) return null;
 
   const eventConfig = getEvent(eventKey);
@@ -107,34 +107,35 @@ export default function ResultModal({ meetId, eventKey, isOpen, onClose }: Props
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-  <label className="field-label">Спортсмен</label>
-  <input
-    type="text"
-    value={search}
-    onChange={(e) => setSearch(e.target.value)}
-    placeholder="Поиск по фамилии или номеру..."
-    className="field !text-xs mb-1.5"
-  />
-  <select required value={athleteId} onChange={(e) => setAthleteId(e.target.value)} className="field">
-    <option value="">-- выберите спортсмена --</option>
-    {searchedAthletes.map((a) => (
-      <option key={a.id} value={a.id}>
-        {a.bib ? `№${a.bib} — ` : ""}
-        {a.fullName} ({teamName(a.teamId)}, {a.ageGroup}, {a.gender === "м" ? "Ю" : "Д"})
-      </option>
-    ))}
-  </select>
+          <label className="field-label">Спортсмен</label>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Поиск по фамилии или номеру..."
+            className="field !text-xs mb-1.5"
+          />
+          <select required value={athleteId} onChange={(e) => setAthleteId(e.target.value)} className="field">
+            <option value="">-- выберите спортсмена --</option>
+            {searchedAthletes.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.bib ? `№${a.bib} — ` : ""}
+                {a.fullName} ({teamName(a.teamId)}, {a.ageGroup}, {a.gender === "м" ? "Ю" : "Д"})
+              </option>
+            ))}
+          </select>
 
-  {search.trim() && filteredAthletes.length > 0 && searchedAthletes.length === 0 && (
-    <p className="text-[11px] text-gold mt-1.5">Ничего не найдено по «{search}».</p>
-  )}
+          {search.trim() && filteredAthletes.length > 0 && searchedAthletes.length === 0 && (
+            <p className="text-[11px] text-gold mt-1.5">Ничего не найдено по «{search}».</p>
+          )}
 
-  {filteredAthletes.length === 0 && (
-    <p className="text-[11px] text-gold mt-1.5">
-      {athletes && athletes.length > 0
-        ? "Все спортсмены в этой категории уже имеют результат в данной дисциплине."
-        : "Нет спортсменов, допущенных к этой дисциплине..."}
-    </p>
+          {filteredAthletes.length === 0 && (
+            <p className="text-[11px] text-gold mt-1.5">
+              {athletes && athletes.length > 0
+                ? "Все спортсмены в этой категории уже имеют результат в данной дисциплине."
+                : "Нет спортсменов, допущенных к этой дисциплине..."}
+            </p>
+          )}
 
           {existingEntries && existingEntries.length > 0 && (
             <p className="text-[10px] num text-muted mt-1.5">Уже внесено результатов: {existingEntries.length}</p>
@@ -157,25 +158,22 @@ export default function ResultModal({ meetId, eventKey, isOpen, onClose }: Props
         </div>
 
         <div>
-          <label className="field-label">Результат {status && "(не требуется)"}</label>
+          <label className="field-label">Результат</label>
           <input
             type="text"
-            required={!status}
-            disabled={!!status}
-            placeholder={!status ? eventConfig.unitHint : STATUS_LABELS[status]}
-            value={!status ? resultRaw : ""}
+            value={resultRaw}
             onChange={(e) => setResultRaw(e.target.value)}
-            className="field num"
+            disabled={status !== null}
+            placeholder={status ? "—" : "Например: 12.34 или 5.40"}
+            className="field"
           />
         </div>
 
-        <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
-          <Button variant="secondary" type="button" onClick={onClose}>
+        <div className="flex justify-end space-x-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
             Отмена
           </Button>
-          <Button variant="primary" type="submit" disabled={filteredAthletes.length === 0}>
-            Сохранить
-          </Button>
+          <Button type="submit">Сохранить</Button>
         </div>
       </form>
     </Modal>
