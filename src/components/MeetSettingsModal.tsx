@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { setEventCustomParams, setEventEligibility, updateMeet } from "@/lib/actions";
+import { setEventCustomParams, setEventEligibilityByGender, updateMeet } from "@/lib/actions";
 import { EVENT_GROUPS } from "@/lib/scoring";
-import { Meet } from "@/lib/types";
+import { Gender, Meet } from "@/lib/types";
 import Modal from "./ui/Modal";
 import Button from "./ui/Button";
 
@@ -13,14 +13,8 @@ interface Props {
   onClose: () => void;
 }
 
-// Черновики полей "дистанция / число этапов" для лыж и эстафеты — общий
-// список дисциплин с customDistance, не зависит от конкретного meet.
 const CUSTOM_DISTANCE_EVENTS = EVENT_GROUPS.flatMap((g) => g.events).filter((ev) => ev.customDistance);
 
-/** Настройки уже созданного соревнования: правка названия/даты/места и
- *  возрастных групп, плюс добавление/снятие дисциплин — раньше это можно
- *  было задать только один раз при создании в MeetSetup. Также позволяет
- *  поправить дистанцию/этапы для лыж и эстафеты после создания. */
 export default function MeetSettingsModal({ meet, isOpen, onClose }: Props) {
   const [name, setName] = useState(meet.name);
   const [date, setDate] = useState(meet.date ?? "");
@@ -48,12 +42,53 @@ export default function MeetSettingsModal({ meet, isOpen, onClose }: Props) {
     await updateMeet(meet.id, { name, date: date || null, place: place || null, ageGroups });
   }
 
-  async function toggleEvent(eventKey: string, active: boolean) {
-    if (active) {
-      await setEventEligibility(meet.id, eventKey, [], []);
-    } else {
-      await setEventEligibility(meet.id, eventKey, ageGroups.length ? ageGroups : meet.ageGroups, ["м", "ж"]);
+  // Текущие возрастные группы дисциплины, отдельно по каждому полу —
+  // читаем ПРЯМО из meet.eventEligibility (props), поэтому UI всегда
+  // отражает актуальное состояние без отдельного черновика.
+  function ageGroupsFor(eventKey: string, g: Gender): string[] {
+    const result = new Set<string>();
+    for (const el of meet.eventEligibility) {
+      if (el.eventKey === eventKey && el.genders.includes(g)) {
+        for (const ag of el.ageGroups) result.add(ag);
+      }
     }
+    return [...result];
+  }
+
+  function byGenderFor(eventKey: string): Partial<Record<Gender, string[]>> {
+    return {
+      м: ageGroupsFor(eventKey, "м"),
+      ж: ageGroupsFor(eventKey, "ж"),
+    };
+  }
+
+  async function toggleEventActive(eventKey: string, active: boolean) {
+    if (active) {
+      await setEventEligibilityByGender(meet.id, eventKey, {});
+    } else {
+      // включаем сразу для обоих полов со всеми текущими возрастными
+      // группами — дальше можно раздельно подправить пол/возраст ниже
+      await setEventEligibilityByGender(meet.id, eventKey, { м: meet.ageGroups, ж: meet.ageGroups });
+    }
+  }
+
+  async function toggleGenderForEvent(eventKey: string, g: Gender) {
+    const cur = byGenderFor(eventKey);
+    const next = { ...cur };
+    if (next[g]?.length) {
+      next[g] = [];
+    } else {
+      next[g] = [...meet.ageGroups];
+    }
+    await setEventEligibilityByGender(meet.id, eventKey, next);
+  }
+
+  async function toggleAgeGroupForEvent(eventKey: string, g: Gender, ag: string) {
+    const cur = byGenderFor(eventKey);
+    const list = cur[g] ?? [];
+    const has = list.includes(ag);
+    const nextList = has ? list.filter((x) => x !== ag) : [...list, ag];
+    await setEventEligibilityByGender(meet.id, eventKey, { ...cur, [g]: nextList });
   }
 
   async function handleSaveDistance(eventKey: string) {
@@ -102,27 +137,81 @@ export default function MeetSettingsModal({ meet, isOpen, onClose }: Props) {
       <div className="border-t border-white/10 pt-4 space-y-3">
         <div className="field-label !mb-1">Дисциплины</div>
         <p className="text-[11px] text-muted -mt-1">
-          Клик добавляет дисциплину сразу для всех текущих возрастных групп и обоих полов. Точную
-          настройку по конкретному возрасту/полу для отдельной дисциплины пока нужно менять здесь же
-          повторным переключением — тонкая раздельная настройка не реализована.
+          Отметьте дисциплину, затем настройте для неё пол и возрастные группы — отдельно для юношей
+          и для девушек. Список возрастных групп берётся из тех, что сохранены выше (если только
+          что изменили их в форме — сначала сохраните основные данные).
         </p>
         {EVENT_GROUPS.map((group) => (
           <div key={group.label} className="space-y-1.5">
             <div className="eyebrow">{group.label}</div>
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-2">
               {group.events.map((ev) => {
                 const active = meet.eventEligibility.some((el) => el.eventKey === ev.key);
                 return (
-                  <button
+                  <div
                     key={ev.key}
-                    type="button"
-                    onClick={() => toggleEvent(ev.key, active)}
-                    className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition ${
-                      active ? "bg-track border-track text-white" : "border-white/10 text-muted hover:border-white/20"
+                    className={`rounded-lg border p-3 text-xs transition ${
+                      active ? "border-track/60 bg-track/5" : "border-white/10 text-[var(--ink)]/60"
                     }`}
                   >
-                    {ev.name}
-                  </button>
+                    <label className="flex items-center gap-2 cursor-pointer font-bold mb-2">
+                      <input
+                        type="checkbox"
+                        checked={active}
+                        onChange={() => toggleEventActive(ev.key, active)}
+                        className="accent-track"
+                      />
+                      {ev.name}
+                    </label>
+
+                    {active && (
+                      <div className="pl-6 space-y-2.5">
+                        {(["м", "ж"] as Gender[]).map((g) => {
+                          const selectedAgeGroups = ageGroupsFor(ev.key, g);
+                          const genderActive = selectedAgeGroups.length > 0;
+                          return (
+                            <div key={g} className="space-y-1.5">
+                              <label className="flex items-center gap-2 cursor-pointer text-[11px] font-bold uppercase tracking-wide text-muted">
+                                <input
+                                  type="checkbox"
+                                  checked={genderActive}
+                                  onChange={() => toggleGenderForEvent(ev.key, g)}
+                                  className="accent-track"
+                                />
+                                {g === "м" ? "Юноши" : "Девушки"}
+                              </label>
+
+                              {genderActive && (
+                                <div className="flex flex-wrap gap-2 pl-5">
+                                  {meet.ageGroups.map((ag) => {
+                                    const checked = selectedAgeGroups.includes(ag);
+                                    return (
+                                      <label
+                                        key={ag}
+                                        className={`px-2 py-1 rounded border cursor-pointer num transition ${
+                                          checked
+                                            ? "bg-track text-white border-track"
+                                            : "border-white/10 text-[var(--ink)]/70 hover:border-white/20"
+                                        }`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          className="hidden"
+                                          checked={checked}
+                                          onChange={() => toggleAgeGroupForEvent(ev.key, g, ag)}
+                                        />
+                                        {ag}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
