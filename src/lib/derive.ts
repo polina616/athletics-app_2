@@ -207,3 +207,29 @@ export function eventCoverage(entries: Entry[]): Record<string, number> {
   }
   return map;
 }
+export interface EventTeamStanding {
+  eventKey: string;
+  eventName: string;
+  standings: TeamStanding[];
+}
+
+/** Командный зачёт ОТДЕЛЬНО по каждой дисциплине — та же логика, что и
+ *  computeTeamStandings(), но entries фильтруются по одной дисциплине за
+ *  раз. Возвращает список только по тем дисциплинам, где вообще есть
+ *  результаты (хотя бы у одной команды), отсортированный по названию. */
+export function teamStandingsByEvent(entries: Entry[], teams: Team[]): EventTeamStanding[] {
+  const eventKeys = Array.from(
+    new Set(entries.filter((e) => !e.deleted).map((e) => e.eventKey))
+  );
+
+  return eventKeys
+    .map((eventKey) => ({
+      eventKey,
+      eventName: getEvent(eventKey).name,
+      standings: computeTeamStandings(
+        entries.filter((e) => e.eventKey === eventKey),
+        teams
+      ),
+    }))
+    .sort((a, b) => a.eventName.localeCompare(b.eventName, "ru"));
+}
