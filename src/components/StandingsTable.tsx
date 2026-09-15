@@ -6,31 +6,56 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/scoring";
 import { teamBreakdowns } from "@/lib/derive";
-import { STATUS_LABELS } from "@/lib/types";
+import { Gender, STATUS_LABELS } from "@/lib/types";
 import AnimatedNumber from "./ui/AnimatedNumber";
 import EmptyState from "./ui/EmptyState";
 
+type TeamGenderFilter = "all" | Gender;
+
 export default function StandingsTable({ meetId }: { meetId: string }) {
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  // Общий зачёт — по всем результатам; ниже переключатель на отдельный
+  // зачёт только юношей / только девушек — тот же teamBreakdowns(),
+  // просто на заранее отфильтрованных по полу entries.
+  const [genderFilter, setGenderFilter] = useState<TeamGenderFilter>("all");
 
-  const teams = useLiveQuery(
-    () => db.teams.where({ meetId }).filter((t) => !t.deleted).toArray(),
-    [meetId]
-  );
-  const entries = useLiveQuery(
-    () => db.entries.where({ meetId }).filter((e) => !e.deleted).toArray(),
-    [meetId]
-  );
+  const teams = useLiveQuery(...);
+  const entries = useLiveQuery(...);
 
   if (!teams || !entries) return <div className="skeleton h-48 rounded-xl2" />;
 
-  const breakdowns = teamBreakdowns(entries, teams);
+  const filteredEntries = genderFilter === "all" ? entries : entries.filter((e) => e.gender === genderFilter);
+  const breakdowns = teamBreakdowns(filteredEntries, teams);
+
+  const filterOptions: { key: TeamGenderFilter; label: string }[] = [
+    { key: "all", label: "Общий" },
+    { key: "м", label: "Юноши" },
+    { key: "ж", label: "Девушки" },
+  ];
 
   return (
     <div className="card-flat p-5 rounded-xl space-y-4">
-      <div className="border-b border-white/10 pb-3">
-        <h3 className="text-lg font-bold">Общекомандный зачёт</h3>
-        <p className="text-xs text-muted">Нажмите на команду для детализации очков</p>
+      <div className="border-b border-white/10 pb-3 space-y-3">
+        <div>
+          <h3 className="text-lg font-bold">Общекомандный зачёт</h3>
+          <p className="text-xs text-muted">Нажмите на команду для детализации очков</p>
+        </div>
+        <div className="flex gap-1.5">
+          {filterOptions.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setGenderFilter(opt.key)}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition border ${
+                genderFilter === opt.key
+                  ? "bg-track border-track text-white"
+                  : "border-white/10 text-muted hover:text-[var(--ink)] hover:border-white/20"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {breakdowns.length === 0 ? (
