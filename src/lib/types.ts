@@ -32,13 +32,8 @@ export interface EventConfig {
   unitHint: string;
   timeFmt?: "sec" | "mmss";
   anchors?: Partial<Record<Gender, EventAnchor>>;
-  exponent?: number;
-  /** true — дистанция/доп. параметры не фиксированы в коде, а задаются
-   *  судьёй при создании (или в настройках) соревнования: лыжи —
-   *  дистанция, эстафета — дистанция и число этапов. */
+  // exponent — убран: шкала очков теперь линейная во всех дисциплинах
   customDistance?: boolean;
-  /** для customDistance: темп (сек на 1 км), реальные anchors на
-   *  конкретную дистанцию считаются как pace × (метры/1000). */
   paceAnchors?: Partial<Record<Gender, EventAnchor>>;
 }
 
