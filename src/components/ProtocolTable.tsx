@@ -28,14 +28,36 @@ interface RowProps {
   athlete: Athlete;
   entry: Entry | null;
   place: number | null;
+  editing: boolean;
+  onStartEdit: () => void;
+  onStopEdit: () => void;
+  /** Вызывается после успешного сохранения — переводит фокус на
+   *  следующую строку категории (или закрывает редактор, если строк
+   *  больше нет). Так Enter при вводе результата сразу двигает судью
+   *  дальше по списку, без ручного клика на следующего участника. */
+  onSavedAdvance: () => void;
 }
 
-function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
+function ResultRow({ meetId, eventKey, athlete, entry, place, editing, onStartEdit, onStopEdit, onSavedAdvance }: RowProps) {
   const eventConfig = getEvent(eventKey);
-  const [editing, setEditing] = useState(false);
-  const [resultRaw, setResultRaw] = useState(entry?.status ? "" : entry?.resultRaw ?? "");
-  const [status, setStatus] = useState<ResultStatus | null>(entry?.status ?? null);
+  // Значения полей больше НЕ читаются из entry при монтировании — строка
+  // переиспользуется между вкладками дисциплин (см. ProtocolTable), и
+  // одноразовая инициализация показывала результат с другой дисциплины.
+  // Вместо этого — пустые дефолты, актуальное значение подставляется
+  // эффектом ниже ровно в момент входа в режим редактирования.
+  const [resultRaw, setResultRaw] = useState("");
+  const [status, setStatus] = useState<ResultStatus | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (editing) {
+      setStatus(entry?.status ?? null);
+      setResultRaw(entry?.status ? "" : entry?.resultRaw ?? "");
+    }
+    // Намеренно зависим только от editing (не от entry) — иначе фоновая
+    // синхронизация могла бы затирать то, что судья ещё печатает.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
 
   const isOK = entry && !entry.status;
   const resText = entry
@@ -58,7 +80,7 @@ function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
         resultRaw,
         manualPoints: entry?.manualPoints ?? null,
       });
-      setEditing(false);
+      onSavedAdvance();
     } finally {
       setSaving(false);
     }
@@ -118,7 +140,7 @@ function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
           <button onClick={handleSave} disabled={saving} className="text-status-ok font-bold text-xs px-1.5">
             {saving ? "…" : "✓"}
           </button>
-          <button onClick={() => setEditing(false)} className="text-muted font-bold text-xs px-1.5">
+          <button onClick={onStopEdit} className="text-muted font-bold text-xs px-1.5">
             ✕
           </button>
         </td>
@@ -145,7 +167,7 @@ function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
       <td className="py-1.5 num text-muted">{athlete.bib ?? "—"}</td>
       <td className="py-1.5 font-medium">{athlete.fullName}</td>
       <td
-        onClick={() => setEditing(true)}
+        onClick={onStartEdit}
         className={`py-1.5 num font-bold cursor-pointer ${
           entry ? (isOK ? "text-status-ok" : "text-status-fail") : "text-muted italic"
         }`}
@@ -156,7 +178,7 @@ function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
       <td className="py-1.5 text-right num font-bold text-track">{pts ?? "—"}</td>
       <td className="py-1.5 text-right whitespace-nowrap">
         <button
-          onClick={() => setEditing(true)}
+          onClick={onStartEdit}
           className="opacity-0 group-hover:opacity-100 text-xs text-muted hover:text-blue transition px-1"
           title={entry ? "Редактировать результат" : "Ввести результат"}
         >
@@ -188,10 +210,18 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
   );
 
   const [expanded, setExpanded] = useState(false);
-
   const [search, setSearch] = useState("");
+  // Какая строка (по athleteId) сейчас в режиме редактирования — вынесено
+  // на уровень таблицы, чтобы после сохранения можно было открыть
+  // редактирование СЛЕДУЮЩЕЙ строки (переход по Enter, см. ResultRow).
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   useEffect(() => {
     setSearch("");
+    // Смена вкладки дисциплины — закрываем любое открытое редактирование,
+    // иначе строка донесла бы значения с другой дисциплины в свою локальную
+    // память (тот самый баг с "чужим" результатом в поле).
+    setEditingId(null);
   }, [eventKey]);
 
   const handlePrint = () => window.print();
@@ -296,7 +326,7 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
               )}
             </h3>
             <p className="text-[11px] text-muted print:hidden mt-1">
-              Нажмите на результат в таблице, чтобы ввести или изменить его.
+              Нажмите на результат в таблице, чтобы ввести или изменить его. Enter — сохранить и перейти к следующему.
             </p>
           </div>
 
@@ -367,8 +397,22 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {rows.map(({ athlete, entry, place }) => (
-                        <ResultRow key={athlete.id} meetId={meetId} eventKey={eventKey} athlete={athlete} entry={entry} place={place} />
+                      {rows.map(({ athlete, entry, place }, idx) => (
+                        <ResultRow
+                          key={athlete.id}
+                          meetId={meetId}
+                          eventKey={eventKey}
+                          athlete={athlete}
+                          entry={entry}
+                          place={place}
+                          editing={editingId === athlete.id}
+                          onStartEdit={() => setEditingId(athlete.id)}
+                          onStopEdit={() => setEditingId(null)}
+                          onSavedAdvance={() => {
+                            const next = rows[idx + 1];
+                            setEditingId(next ? next.athlete.id : null);
+                          }}
+                        />
                       ))}
                     </tbody>
                   </table>
