@@ -186,7 +186,12 @@ export default function StandingsTabs({ meetId }: { meetId: string }) {
             </div>
           )}
 
-          {activeTab === "teams" && <StandingsTable meetId={meetId} />}
+          {activeTab === "teams" && (
+  <div className="space-y-6">
+    <StandingsTable meetId={meetId} />
+    <TeamStandingsByEvent meetId={meetId} />
+  </div>
+)}
 
           {activeTab === "charts" && <ChartsPanel meetId={meetId} />}
         </motion.div>
