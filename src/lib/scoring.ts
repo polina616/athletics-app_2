@@ -30,6 +30,7 @@ import { EventConfig, Gender } from "./types";
  * динамически в distanceAnchor() ниже.
  */
 export const MIN_POINTS = 1;
+const BASE_POINTS = 15;
 
 export const EVENTS: EventConfig[] = [
   // ---------------- бег ----------------
@@ -57,6 +58,11 @@ export const EVENTS: EventConfig[] = [
     key: "500m", name: "Бег 500 м", cat: "track", timeFmt: "sec",
     unitHint: "сек, напр. 78.40", exponent: 1.87,
     anchors: { м: { elite: 62.0, base: 95.0 }, ж: { elite: 70.0, base: 105.0 } },
+  },
+    {
+    key: "600m", name: "Бег 600 м", cat: "track", timeFmt: "mmss",
+    unitHint: "мм:сс.д, напр. 1:35.20", exponent: 1.88,
+    anchors: { м: { elite: 79, base: 127 }, ж: { elite: 90, base: 143 } },
   },
   {
     key: "800m", name: "Бег 800 м", cat: "track", timeFmt: "mmss",
@@ -253,9 +259,18 @@ export function computeAutoPoints(
     spread = anchor.elite - anchor.base;
   }
 
+  // стало
   if (diff <= 0) {
-    // результат хуже базового уровня — не 0, а минимальный балл
-    return MIN_POINTS;
+    // Результат хуже базового уровня. Раньше здесь сразу возвращался
+    // фиксированный MIN_POINTS — из-за этого на слабых/детских забегах
+    // почти все получали одинаковую единицу, и протокол их не различал.
+    // Теперь очки продолжают линейно снижаться ещё на один такой же
+    // "размах" (spread) хуже базового — от BASE_POINTS ровно на границе
+    // базового норматива до MIN_POINTS на границе этого запаса. Жёсткий
+    // минимум ставится только результатам хуже этой расширенной границы.
+    const over = -diff; // насколько хуже базового уровня
+    const ratio = Math.min(1, over / spread);
+    return Math.max(MIN_POINTS, Math.round(BASE_POINTS - (BASE_POINTS - MIN_POINTS) * ratio));
   }
   const A = 1000 / Math.pow(spread, C);
   return Math.max(MIN_POINTS, Math.round(A * Math.pow(diff, C)));
@@ -278,5 +293,6 @@ export function formulaNote(
   const distNote = ev.customDistance
     ? ` Дистанция соревнования: ${distanceMeters ?? FALLBACK_DISTANCE[ev.key] ?? "?"} м.`
     : "";
-  return `Оценка: P ≈ (1000 / размах^${ev.exponent}) × (${dir})^${ev.exponent} ≈ ${pts} (минимум ${MIN_POINTS} балл, даже если результат хуже базового). Опора: элитный ${anchor.elite.toFixed(1)}${unit} → 1000, базовый ${anchor.base.toFixed(1)}${unit} → ${MIN_POINTS}.${distNote}`;
+const belowBaseNote = ` Результаты хуже базового норматива не сливаются в одну оценку — очки линейно снижаются от ${BASE_POINTS} (на границе базового норматива) до ${MIN_POINTS} (на границе ещё одного такого же размаха хуже).`;
+  return `Оценка: P ≈ (1000 / размах^${ev.exponent}) × (${dir})^${ev.exponent} ≈ ${pts} (минимум ${MIN_POINTS} балл).${belowBaseNote} Опора: элитный ${anchor.elite.toFixed(1)}${unit} → 1000, базовый ${anchor.base.toFixed(1)}${unit} → ${BASE_POINTS}.${distNote}`;
 }
