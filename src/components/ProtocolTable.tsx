@@ -91,16 +91,28 @@ function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
               <option value="DQ">{STATUS_LABELS.DQ}</option>
               <option value="NM">{STATUS_LABELS.NM}</option>
             </select>
+// стало
             {!status && (
-              <input
-                autoFocus
-                type="text"
-                value={resultRaw}
-                onChange={(e) => setResultRaw(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                placeholder={eventConfig.unitHint}
-                className="field !py-1 !px-1.5 !text-[11px] num w-28"
-              />
+              eventConfig.timeFmt === "mmss" ? (
+                <TimeMaskInput
+                  value={resultRaw}
+                  onChange={setResultRaw}
+                  autoFocus
+                  onKeyDown={(e) => e.key === "Enter" && handleSave()}
+                  placeholder={eventConfig.unitHint}
+                  className="field !py-1 !px-1.5 !text-[11px] num w-28"
+                />
+              ) : (
+                <input
+                  autoFocus
+                  type="text"
+                  value={resultRaw}
+                  onChange={(e) => setResultRaw(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSave()}
+                  placeholder={eventConfig.unitHint}
+                  className="field !py-1 !px-1.5 !text-[11px] num w-28"
+                />
+              )
             )}
           </div>
         </td>
