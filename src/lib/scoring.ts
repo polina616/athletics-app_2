@@ -107,37 +107,37 @@ export const EVENTS: EventConfig[] = [
 
   // ---------------- прыжки ----------------
   {
-    key: "ljStanding", name: "Прыжок в длину с места", cat: "jump",
-    unitHint: "метры, напр. 1.95", exponent: 1.4,
-    anchors: { м: { elite: 2.6, base: 1.2 }, ж: { elite: 2.2, base: 1.0 } },
-  },
-  {
-    key: "ljRun", name: "Прыжок в длину с разбега", cat: "jump",
-    unitHint: "метры, напр. 4.35", exponent: 1.4,
-    anchors: { м: { elite: 6.5, base: 2.8 }, ж: { elite: 5.5, base: 2.3 } },
-  },
+  key: "ljStanding", name: "Прыжок в длину с места", cat: "jump",
+  unitHint: "метры, напр. 1.95", exponent: 1,
+  anchors: { м: { elite: 2.6, base: 1.2 }, ж: { elite: 2.2, base: 1.0 } },
+},
+{
+  key: "ljRun", name: "Прыжок в длину с разбега", cat: "jump",
+  unitHint: "метры, напр. 4.35", exponent: 1,
+  anchors: { м: { elite: 6.5, base: 2.8 }, ж: { elite: 5.5, base: 2.3 } },
+},
 
   // ---------------- метания ----------------
   {
-    key: "grenade300", name: "Метание гранаты 300 г", cat: "throw",
-    unitHint: "метры, напр. 28.40", exponent: 1.05,
-    anchors: { м: { elite: 55, base: 20 }, ж: { elite: 40, base: 12 } },
-  },
-  {
-    key: "grenade500", name: "Метание гранаты 500 г", cat: "throw",
-    unitHint: "метры, напр. 22.10", exponent: 1.05,
-    anchors: { м: { elite: 45, base: 15 }, ж: { elite: 32, base: 10 } },
-  },
-  {
-    key: "grenade700", name: "Метание гранаты 700 г", cat: "throw",
-    unitHint: "метры, напр. 18.00", exponent: 1.05,
-    anchors: { м: { elite: 38, base: 12 }, ж: { elite: 26, base: 8 } },
-  },
-  {
-    key: "sword150", name: "Метание меча 150 г", cat: "throw",
-    unitHint: "метры, напр. 24.00", exponent: 1.05,
-    anchors: { м: { elite: 50, base: 18 }, ж: { elite: 38, base: 12 } },
-  },
+  key: "grenade300", name: "Метание гранаты 300 г", cat: "throw",
+  unitHint: "метры, напр. 28.40", exponent: 1,
+  anchors: { м: { elite: 55, base: 20 }, ж: { elite: 40, base: 12 } },
+},
+{
+  key: "grenade500", name: "Метание гранаты 500 г", cat: "throw",
+  unitHint: "метры, напр. 22.10", exponent: 1,
+  anchors: { м: { elite: 45, base: 15 }, ж: { elite: 32, base: 10 } },
+},
+{
+  key: "grenade700", name: "Метание гранаты 700 г", cat: "throw",
+  unitHint: "метры, напр. 18.00", exponent: 1,
+  anchors: { м: { elite: 38, base: 12 }, ж: { elite: 26, base: 8 } },
+},
+{
+  key: "sword150", name: "Метание меча 150 г", cat: "throw",
+  unitHint: "метры, напр. 24.00", exponent: 1,
+  anchors: { м: { elite: 50, base: 18 }, ж: { elite: 38, base: 12 } },
+},
 
   // ---------------- сила ----------------
   {
