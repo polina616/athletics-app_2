@@ -14,13 +14,19 @@ type TeamGenderFilter = "all" | Gender;
 
 export default function StandingsTable({ meetId }: { meetId: string }) {
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
-  // Общий зачёт — по всем результатам; ниже переключатель на отдельный
-  // зачёт только юношей / только девушек — тот же teamBreakdowns(),
-  // просто на заранее отфильтрованных по полу entries.
+  // Общий зачёт считается по всем результатам сразу; переключатель ниже
+  // даёт отдельный зачёт только юношей или только девушек — тот же
+  // teamBreakdowns(), просто на заранее отфильтрованных по полу entries.
   const [genderFilter, setGenderFilter] = useState<TeamGenderFilter>("all");
 
-  const teams = useLiveQuery(...);
-  const entries = useLiveQuery(...);
+  const teams = useLiveQuery(
+    () => db.teams.where({ meetId }).filter((t) => !t.deleted).toArray(),
+    [meetId]
+  );
+  const entries = useLiveQuery(
+    () => db.entries.where({ meetId }).filter((e) => !e.deleted).toArray(),
+    [meetId]
+  );
 
   if (!teams || !entries) return <div className="skeleton h-48 rounded-xl2" />;
 
