@@ -11,6 +11,7 @@ import { Athlete, Entry, Gender, ResultStatus, STATUS_LABELS } from "@/lib/types
 import EmptyState from "./ui/EmptyState";
 import Button from "./ui/Button";
 import Modal from "./ui/Modal";
+import TimeMaskInput from "./ui/TimeMaskInput";
 
 const medalClass = (place: number) =>
   place === 1
@@ -29,8 +30,6 @@ interface RowProps {
   place: number | null;
 }
 
-/** Одна строка протокола — она же форма ввода. Клик по ячейке результата
- *  открывает инлайн-редактор прямо в таблице, без отдельной модалки. */
 function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
   const eventConfig = getEvent(eventKey);
   const [editing, setEditing] = useState(false);
@@ -91,7 +90,6 @@ function ResultRow({ meetId, eventKey, athlete, entry, place }: RowProps) {
               <option value="DQ">{STATUS_LABELS.DQ}</option>
               <option value="NM">{STATUS_LABELS.NM}</option>
             </select>
-// стало
             {!status && (
               eventConfig.timeFmt === "mmss" ? (
                 <TimeMaskInput
@@ -191,9 +189,6 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
 
   const [expanded, setExpanded] = useState(false);
 
-  // Поиск по ФИО/номеру внутри протокола — чтобы найти спортсмена и
-  // ввести результат, не листая всю категорию вручную. Сбрасывается при
-  // смене дисциплины, т.к. компонент переиспользуется между вкладками.
   const [search, setSearch] = useState("");
   useEffect(() => {
     setSearch("");
@@ -204,12 +199,6 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
   if (!meet || !entries || !athletes) return <div className="skeleton h-48 rounded-xl2" />;
   const currentMeet = meet;
 
-  // Дисциплина может быть допущена раздельно для юношей и девушек со
-  // своими возрастными группами (см. MeetSetup) — тогда для одного
-  // eventKey в eventEligibility будет несколько записей. Собираем
-  // уникальные пары "возраст × пол" из всех подходящих записей; если
-  // записей вовсе нет — как и раньше, считаем допущенными всех по общему
-  // списку возрастных групп соревнования.
   const eligibilityRows = meet.eventEligibility.filter((el) => el.eventKey === eventKey);
 
   const pairs: { ag: string; g: Gender }[] = [];
@@ -281,9 +270,6 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
   const matchesQuery = (a: Athlete) =>
     !q || a.fullName.toLowerCase().includes(q) || (a.bib ?? "").toLowerCase().includes(q);
 
-  // Применяем фильтр к уже посчитанным рядам категорий: сохраняем места и
-  // сортировку как есть, просто убираем строки без совпадения. Категории
-  // без единого совпадения при активном поиске не отрисовываем вовсе.
   const filteredCategoryTables = categoryTables
     .map((cat) => ({ ...cat, rows: cat.rows.filter(({ athlete }) => matchesQuery(athlete)) }))
     .filter((cat) => !q || cat.rows.length > 0);
