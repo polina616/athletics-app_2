@@ -5,18 +5,42 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/scoring";
-import { teamBreakdowns } from "@/lib/derive";
+import { teamBreakdowns, TeamBreakdownRow } from "@/lib/derive";
 import { Gender, STATUS_LABELS } from "@/lib/types";
 import AnimatedNumber from "./ui/AnimatedNumber";
 import EmptyState from "./ui/EmptyState";
 
 type TeamGenderFilter = "all" | Gender;
 
+/** Группирует строки раскладки команды по дисциплине — "откуда сколько
+ *  очков и кто принёс" читается по видам, а не одним общим списком. */
+function groupRowsByEvent(rows: TeamBreakdownRow[]) {
+  const map = new Map<string, TeamBreakdownRow[]>();
+  for (const r of rows) {
+    const list = map.get(r.eventKey) ?? [];
+    list.push(r);
+    map.set(r.eventKey, list);
+  }
+  return [...map.entries()]
+    .map(([eventKey, groupRows]) => ({
+      eventKey,
+      eventName: getEvent(eventKey).name,
+      rows: [...groupRows].sort((a, b) => b.pts - a.pts),
+    }))
+    .sort((a, b) => a.eventName.localeCompare(b.eventName, "ru"));
+}
+
+const medalClass = (place: number) =>
+  place === 1
+    ? "bg-gold text-black"
+    : place === 2
+    ? "bg-white/25 text-black"
+    : place === 3
+    ? "bg-track-dark text-white"
+    : "bg-white/10 text-[var(--ink)]";
+
 export default function StandingsTable({ meetId }: { meetId: string }) {
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
-  // Общий зачёт считается по всем результатам сразу; переключатель ниже
-  // даёт отдельный зачёт только юношей или только девушек — тот же
-  // teamBreakdowns(), просто на заранее отфильтрованных по полу entries.
   const [genderFilter, setGenderFilter] = useState<TeamGenderFilter>("all");
 
   const teams = useLiveQuery(
@@ -44,7 +68,7 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
       <div className="border-b border-white/10 pb-3 space-y-3">
         <div>
           <h3 className="text-lg font-bold">Общекомандный зачёт</h3>
-          <p className="text-xs text-muted">Нажмите на команду для детализации очков</p>
+          <p className="text-xs text-muted">Нажмите на команду для детализации очков по дисциплинам</p>
         </div>
         <div className="flex gap-1.5">
           {filterOptions.map((opt) => (
@@ -70,6 +94,7 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
         <div className="space-y-2">
           {breakdowns.map((team, rank) => {
             const isExpanded = expandedTeam === team.teamId;
+            const groups = isExpanded ? groupRowsByEvent(team.rows) : [];
 
             return (
               <motion.div
@@ -121,45 +146,59 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
                       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                       className="overflow-hidden"
                     >
-                      <div className="p-3 bg-[var(--surface)] border-t border-white/10 space-y-2 text-xs">
-                        <div className="font-bold text-muted uppercase text-[10px] tracking-wide">
-                          Вклад участников в результат команды:
-                        </div>
-
+                      <div className="p-3 bg-[var(--surface)] border-t border-white/10 space-y-4 text-xs">
                         {team.rows.length === 0 ? (
                           <p className="text-muted italic">Нет зафиксированных результатов</p>
                         ) : (
-                          <table className="w-full text-left">
-                            <thead className="text-muted font-bold border-b border-white/5">
-                              <tr>
-                                <th className="py-1">№</th>
-                                <th className="py-1">Спортсмен</th>
-                                <th className="py-1">Вид</th>
-                                <th className="py-1">Категория</th>
-                                <th className="py-1">Рез-т</th>
-                                <th className="py-1 text-right">Очки</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                              {team.rows.map((r, idx) => {
-                                const ev = getEvent(r.eventKey);
-                                const resText = r.status ? STATUS_LABELS[r.status] : r.resultRaw;
-
-                                return (
-                                  <tr key={idx}>
-                                    <td className="py-1.5 num text-muted">{r.bib ?? "—"}</td>
-                                    <td className="py-1.5 font-medium">{r.athleteName}</td>
-                                    <td className="py-1.5 text-[var(--ink)]/80">{ev.name}</td>
-                                    <td className="py-1.5 text-[var(--ink)]/70">
-                                      {r.ageGroup} ({r.gender === "м" ? "Ю" : "Д"})
-                                    </td>
-                                    <td className={`py-1.5 num ${r.status ? "text-status-fail" : ""}`}>{resText}</td>
-                                    <td className="py-1.5 text-right font-bold num text-track">+{r.pts}</td>
+                          groups.map((group) => (
+                            <div key={group.eventKey} className="space-y-1.5">
+                              <div className="font-bold text-blue uppercase text-[10px] tracking-wide border-b border-white/5 pb-1">
+                                {group.eventName}
+                                <span className="text-muted font-normal normal-case ml-1.5">
+                                  ({group.rows.reduce((s, r) => s + r.pts, 0)} очк.)
+                                </span>
+                              </div>
+                              <table className="w-full text-left">
+                                <thead className="text-muted font-bold border-b border-white/5">
+                                  <tr>
+                                    <th className="py-1 w-10">Место</th>
+                                    <th className="py-1">№</th>
+                                    <th className="py-1">Спортсмен</th>
+                                    <th className="py-1">Категория</th>
+                                    <th className="py-1">Рез-т</th>
+                                    <th className="py-1 text-right">Очки</th>
                                   </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                  {group.rows.map((r, idx) => {
+                                    const resText = r.status ? STATUS_LABELS[r.status] : r.resultRaw;
+                                    return (
+                                      <tr key={idx}>
+                                        <td className="py-1.5 num">
+                                          {r.place ? (
+                                            <span
+                                              className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${medalClass(r.place)}`}
+                                            >
+                                              {r.place}
+                                            </span>
+                                          ) : (
+                                            <span className="text-muted">—</span>
+                                          )}
+                                        </td>
+                                        <td className="py-1.5 num text-muted">{r.bib ?? "—"}</td>
+                                        <td className="py-1.5 font-medium">{r.athleteName}</td>
+                                        <td className="py-1.5 text-[var(--ink)]/70">
+                                          {r.ageGroup} ({r.gender === "м" ? "Ю" : "Д"})
+                                        </td>
+                                        <td className={`py-1.5 num ${r.status ? "text-status-fail" : ""}`}>{resText}</td>
+                                        <td className="py-1.5 text-right font-bold num text-track">+{r.pts}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          ))
                         )}
                       </div>
                     </motion.div>
