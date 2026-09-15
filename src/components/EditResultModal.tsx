@@ -81,17 +81,22 @@ export default function EditResultModal({ entry, isOpen, onClose }: Props) {
           </select>
         </div>
 
+        // стало
         <div>
           <label className="field-label">Результат {status && "(не требуется)"}</label>
-          <input
-            type="text"
-            required={!status}
-            disabled={!!status}
-            placeholder={!status ? eventConfig.unitHint : STATUS_LABELS[status]}
-            value={!status ? resultRaw : ""}
-            onChange={(e) => setResultRaw(e.target.value)}
-            className="field num"
-          />
+          {!status && eventConfig.timeFmt === "mmss" ? (
+            <TimeMaskInput value={resultRaw} onChange={setResultRaw} placeholder={eventConfig.unitHint} className="field num" />
+          ) : (
+            <input
+              type="text"
+              required={!status}
+              disabled={!!status}
+              placeholder={!status ? eventConfig.unitHint : STATUS_LABELS[status]}
+              value={!status ? resultRaw : ""}
+              onChange={(e) => setResultRaw(e.target.value)}
+              className="field num"
+            />
+          )}
         </div>
 
         <div>
