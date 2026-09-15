@@ -10,19 +10,14 @@ export interface AthleteDefaults {
 
 interface AppState {
   currentMeetId: string | null;
-  selectedEventKey: string | null;
   isAthleteModalOpen: boolean;
-  isResultModalOpen: boolean;
   /** Последние выбранные команда/возраст/пол при регистрации спортсмена —
    *  отдельно по каждому соревнованию, т.к. судья обычно вносит несколько
    *  спортсменов подряд из одной команды/категории. */
   lastAthleteDefaults: Record<string, AthleteDefaults>;
 
   setCurrentMeetId: (id: string | null) => void;
-  setSelectedEventKey: (key: string | null) => void;
   setAthleteModalOpen: (open: boolean) => void;
-  setResultModalOpen: (open: boolean) => void;
-  openResultModal: (eventKey: string) => void;
   setLastAthleteDefaults: (meetId: string, defaults: AthleteDefaults) => void;
   /** Вызывается после удаления соревнования — подчищает запомненные
    *  дефолты этого meetId и, на всякий случай, сбрасывает currentMeetId,
@@ -34,17 +29,11 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       currentMeetId: null,
-      selectedEventKey: null,
       isAthleteModalOpen: false,
-      isResultModalOpen: false,
       lastAthleteDefaults: {},
 
       setCurrentMeetId: (id) => set({ currentMeetId: id }),
-      setSelectedEventKey: (key) => set({ selectedEventKey: key }),
       setAthleteModalOpen: (open) => set({ isAthleteModalOpen: open }),
-      setResultModalOpen: (open) => set({ isResultModalOpen: open }),
-
-      openResultModal: (eventKey) => set({ selectedEventKey: eventKey, isResultModalOpen: true }),
 
       setLastAthleteDefaults: (meetId, defaults) =>
         set((state) => ({
