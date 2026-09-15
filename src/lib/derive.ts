@@ -86,6 +86,7 @@ export interface TeamBreakdownRow {
   status: Entry["status"];
   resultRaw: string;
   pts: number;
+  place: number | null;
 }
 
 export interface TeamBreakdown {
@@ -96,8 +97,24 @@ export interface TeamBreakdown {
 }
 
 /** Подробная раскладка командного результата: какая дисциплина/спортсмен
- *  сколько очков принёс в общий итог команды. */
+ *  сколько очков принёс в общий итог команды, плюс место в протоколе. */
 export function teamBreakdowns(entries: Entry[], teams: Team[]): TeamBreakdown[] {
+  // Считаем место КАЖДОГО результата один раз — прогоняем protocolRows()
+  // по каждой уникальной паре (дисциплина, возраст, пол), встречающейся
+  // среди результатов, и запоминаем place по id записи.
+  const placeByEntryId = new Map<string, number | null>();
+  const combos = new Map<string, { eventKey: string; ageGroup: string; gender: Gender }>();
+  for (const e of entries) {
+    if (e.deleted) continue;
+    const key = JSON.stringify([e.eventKey, e.ageGroup, e.gender]);
+    if (!combos.has(key)) combos.set(key, { eventKey: e.eventKey, ageGroup: e.ageGroup, gender: e.gender });
+  }
+  for (const { eventKey, ageGroup, gender } of combos.values()) {
+    for (const row of protocolRows(entries, eventKey, ageGroup, gender)) {
+      placeByEntryId.set(row.entry.id, row.place);
+    }
+  }
+
   return teams
     .map((t) => {
       const rows: TeamBreakdownRow[] = entries
@@ -113,6 +130,7 @@ export function teamBreakdowns(entries: Entry[], teams: Team[]): TeamBreakdown[]
             status: e.status,
             resultRaw: e.resultRaw,
             pts,
+            place: placeByEntryId.get(e.id) ?? null,
           };
         })
         .sort((a, b) => b.pts - a.pts);
