@@ -8,6 +8,7 @@ import { getEvent } from "@/lib/scoring";
 import { Gender, ResultStatus, STATUS_LABELS } from "@/lib/types";
 import Modal from "./ui/Modal";
 import Button from "./ui/Button";
+import TimeMaskInput from "./ui/TimeMaskInput";
 
 interface Props {
   meetId: string;
@@ -159,14 +160,24 @@ export default function ResultModal({ meetId, eventKey, isOpen, onClose }: Props
 
         <div>
           <label className="field-label">Результат</label>
-          <input
-            type="text"
-            value={resultRaw}
-            onChange={(e) => setResultRaw(e.target.value)}
-            disabled={status !== null}
-            placeholder={status ? "—" : "Например: 12.34 или 5.40"}
-            className="field"
-          />
+          {eventConfig.timeFmt === "mmss" ? (
+            <TimeMaskInput
+              value={resultRaw}
+              onChange={setResultRaw}
+              disabled={status !== null}
+              placeholder={status ? "—" : eventConfig.unitHint}
+              className="field num"
+            />
+          ) : (
+            <input
+              type="text"
+              value={resultRaw}
+              onChange={(e) => setResultRaw(e.target.value)}
+              disabled={status !== null}
+              placeholder={status ? "—" : "Например: 12.34 или 5.40"}
+              className="field"
+            />
+          )}
         </div>
 
         <div className="flex justify-end space-x-2 pt-2">
