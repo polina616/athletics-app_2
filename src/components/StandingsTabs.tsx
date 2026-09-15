@@ -8,6 +8,7 @@ import { EVENTS } from "@/lib/scoring";
 import { personalAllAround } from "@/lib/derive";
 import ProtocolTable from "./ProtocolTable";
 import StandingsTable from "./StandingsTable";
+import TeamStandingsByEvent from "./TeamStandingsByEvent";
 import ChartsPanel from "./ChartsPanel";
 import EmptyState from "./ui/EmptyState";
 import { IconMedal } from "./ui/icons";
