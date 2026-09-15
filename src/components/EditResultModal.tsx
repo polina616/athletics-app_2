@@ -6,6 +6,7 @@ import { getEvent } from "@/lib/scoring";
 import { Entry, ResultStatus, STATUS_LABELS } from "@/lib/types";
 import Modal from "./ui/Modal";
 import Button from "./ui/Button";
+import TimeMaskInput from "./ui/TimeMaskInput";
 
 interface Props {
   entry: Entry | null;
@@ -81,11 +82,15 @@ export default function EditResultModal({ entry, isOpen, onClose }: Props) {
           </select>
         </div>
 
-        // стало
         <div>
           <label className="field-label">Результат {status && "(не требуется)"}</label>
           {!status && eventConfig.timeFmt === "mmss" ? (
-            <TimeMaskInput value={resultRaw} onChange={setResultRaw} placeholder={eventConfig.unitHint} className="field num" />
+            <TimeMaskInput
+              value={resultRaw}
+              onChange={setResultRaw}
+              placeholder={eventConfig.unitHint}
+              className="field num"
+            />
           ) : (
             <input
               type="text"
