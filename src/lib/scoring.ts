@@ -65,20 +65,20 @@ export const EVENTS: EventConfig[] = [
     anchors: { м: { elite: 79, base: 127 }, ж: { elite: 90, base: 143 } },
   },
   {
-    key: "800m", name: "Бег 800 м", cat: "track", timeFmt: "mmss",
-    unitHint: "мм:сс.д, напр. 2:35.80", exponent: 1.9,
-    anchors: { м: { elite: 112, base: 190 }, ж: { elite: 130, base: 220 } },
-  },
-  {
-    key: "1000m", name: "Бег 1000 м", cat: "track", timeFmt: "mmss",
-    unitHint: "мм:сс.д, напр. 3:10.00", exponent: 1.9,
-    anchors: { м: { elite: 150, base: 260 }, ж: { elite: 175, base: 300 } },
-  },
-  {
-    key: "1500m", name: "Бег 1500 м", cat: "track", timeFmt: "mmss",
-    unitHint: "мм:сс.д, напр. 4:30.50", exponent: 1.9,
-    anchors: { м: { elite: 235, base: 390 }, ж: { elite: 265, base: 450 } },
-  },
+  key: "800m", name: "Бег 800 м", cat: "track", timeFmt: "mmss",
+  unitHint: "мм:сс.д, напр. 2:35.80", exponent: 1.55,
+  anchors: { м: { elite: 112, base: 205 }, ж: { elite: 130, base: 235 } },
+},
+{
+  key: "1000m", name: "Бег 1000 м", cat: "track", timeFmt: "mmss",
+  unitHint: "мм:сс.д, напр. 3:10.00", exponent: 1.55,
+  anchors: { м: { elite: 150, base: 280 }, ж: { elite: 175, base: 320 } },
+},
+{
+  key: "1500m", name: "Бег 1500 м", cat: "track", timeFmt: "mmss",
+  unitHint: "мм:сс.д, напр. 4:30.50", exponent: 1.55,
+  anchors: { м: { elite: 235, base: 415 }, ж: { elite: 265, base: 480 } },
+},
   {
     key: "2000m", name: "Бег 2000 м", cat: "track", timeFmt: "mmss",
     unitHint: "мм:сс.д, напр. 6:20.00", exponent: 1.9,
