@@ -33,10 +33,6 @@ export default function ResultModal({ meetId, eventKey, isOpen, onClose }: Props
     [meetId, eventKey]
   );
 
-  // Дисциплина может быть допущена раздельно для юношей и девушек со
-  // своими возрастными группами (см. MeetSetup) — тогда для одного
-  // eventKey в eventEligibility будет несколько записей. Спортсмен
-  // допущен, если подходит хотя бы под одну из них.
   const eligibilityRows = meet?.eventEligibility.filter((el) => el.eventKey === eventKey) ?? [];
 
   function isAthleteAllowed(a: { gender: Gender; ageGroup: string }) {
@@ -57,7 +53,7 @@ export default function ResultModal({ meetId, eventKey, isOpen, onClose }: Props
   const filteredAthletes = useMemo(() => {
     if (!athletes) return [];
     return athletes.filter(
-      (a) => isAthleteAllowed(a) && !athleteIdsWithResults.has(a.id) // исключаем тех, у кого уже есть результат
+      (a) => isAthleteAllowed(a) && !athleteIdsWithResults.has(a.id)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athletes, meet?.eventEligibility, athleteIdsWithResults]);
