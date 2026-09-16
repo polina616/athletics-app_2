@@ -12,6 +12,7 @@ import TeamStandingsByEvent from "./TeamStandingsByEvent";
 import ChartsPanel from "./ChartsPanel";
 import EmptyState from "./ui/EmptyState";
 import { IconMedal } from "./ui/icons";
+import RelayProtocolTable from "./RelayProtocolTable";
 
 type Tab = "protocols" | "individual" | "teams" | "charts";
 
@@ -110,7 +111,11 @@ export default function StandingsTabs({ meetId }: { meetId: string }) {
                       );
                     })}
                   </div>
-                  {currentEvent && <ProtocolTable meetId={meetId} eventKey={currentEvent} />}
+                  {currentEvent === "relay" ? (
+  <RelayProtocolTable meetId={meetId} />
+) : (
+  currentEvent && <ProtocolTable meetId={meetId} eventKey={currentEvent} />
+)}
                 </>
               )}
             </div>
