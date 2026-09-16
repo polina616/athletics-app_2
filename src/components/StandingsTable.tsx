@@ -51,11 +51,14 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
     () => db.entries.where({ meetId }).filter((e) => !e.deleted).toArray(),
     [meetId]
   );
+const relayTeams = useLiveQuery(() => db.relayTeams.where({ meetId }).filter((r) => !r.deleted).toArray(), [meetId]);
+const athletes = useLiveQuery(() => db.athletes.where({ meetId }).filter((a) => !a.deleted).toArray(), [meetId]);
 
-  if (!teams || !entries) return <div className="skeleton h-48 rounded-xl2" />;
+if (!teams || !entries || !relayTeams || !athletes) return <div className="skeleton h-48 rounded-xl2" />;
 
-  const filteredEntries = genderFilter === "all" ? entries : entries.filter((e) => e.gender === genderFilter);
-  const breakdowns = teamBreakdowns(filteredEntries, teams);
+const filteredEntries = genderFilter === "all" ? entries : entries.filter((e) => e.gender === genderFilter);
+const filteredRelayTeams = genderFilter === "all" ? relayTeams : relayTeams.filter((r) => r.gender === genderFilter);
+const breakdowns = teamBreakdowns(filteredEntries, teams, filteredRelayTeams, athletes);
 
   const filterOptions: { key: TeamGenderFilter; label: string }[] = [
     { key: "all", label: "Общий" },
