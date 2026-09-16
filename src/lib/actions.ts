@@ -2,17 +2,17 @@ import { v4 as uuid } from "uuid";
 import { db } from "./db";
 import { supabase } from "./supabaseClient";
 import { fullSync } from "./sync";
-import {
-  AgeGroup,
-  Athlete,
-  Entry,
-  EventCustomParams,
-  EventEligibility,
-  Gender,
-  Meet,
-  ResultStatus,
-  Team,
-} from "./types";
+import { AgeGroup, 
+        Athlete, 
+        Entry,
+        EventCustomParams,
+        EventEligibility,
+        Gender,
+        Meet,
+        RelayTeam, 
+        ResultStatus, 
+        Team } from "./types";
+
 import { computeAutoPoints, getEvent, parseResult } from "./scoring";
 
 function nowIso() {
@@ -407,4 +407,86 @@ export async function saveResultInline(
   } else {
     await addEntry({ meetId, eventKey, athleteId, ...input });
   }
+}
+
+export async function addRelayTeam(
+  meetId: string,
+  teamId: string,
+  ageGroup: AgeGroup,
+  gender: Gender,
+  legsCount: number
+): Promise<RelayTeam> {
+  const relayTeam: RelayTeam = {
+    id: uuid(),
+    meetId,
+    teamId,
+    ageGroup,
+    gender,
+    legAthleteIds: Array.from({ length: legsCount }, () => ""),
+    status: null,
+    resultRaw: "",
+    resultSeconds: null,
+    manualPoints: null,
+    autoPoints: 0,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    deleted: false,
+    dirty: true,
+  };
+  await db.relayTeams.put(relayTeam);
+  kickSync(meetId);
+  return relayTeam;
+}
+
+/** Меняет состав эстафетной команды по этапам — сам результат не трогает. */
+export async function setRelayTeamLegs(id: string, meetId: string, legAthleteIds: string[]): Promise<void> {
+  const rt = await db.relayTeams.get(id);
+  if (!rt) return;
+  await db.relayTeams.put({ ...rt, legAthleteIds, updatedAt: nowIso(), dirty: true });
+  kickSync(meetId);
+}
+
+export async function deleteRelayTeam(id: string, meetId: string): Promise<void> {
+  const rt = await db.relayTeams.get(id);
+  if (!rt) return;
+  await db.relayTeams.put({ ...rt, deleted: true, updatedAt: nowIso(), dirty: true });
+  kickSync(meetId);
+}
+
+export interface UpdateRelayResultInput {
+  status: ResultStatus | null;
+  resultRaw: string;
+  manualPoints: number | null;
+}
+
+/** Один общий результат на всю эстафетную команду (не на каждого бегуна). */
+export async function saveRelayResult(id: string, meetId: string, input: UpdateRelayResultInput): Promise<void> {
+  const rt = await db.relayTeams.get(id);
+  if (!rt) return;
+  const ev = getEvent("relay");
+  const meet = await db.meets.get(meetId);
+
+  let resultSeconds: number | null = null;
+  let auto = 0;
+  let resultRaw = "";
+
+  if (!input.status) {
+    const value = parseResult(ev, input.resultRaw);
+    resultSeconds = Number.isNaN(value) ? null : value;
+    const distanceMeters = meet?.eventParams?.relay?.distanceMeters;
+    auto = computeAutoPoints(ev, rt.gender, value, distanceMeters);
+    resultRaw = input.resultRaw.trim();
+  }
+
+  await db.relayTeams.put({
+    ...rt,
+    status: input.status,
+    resultRaw,
+    resultSeconds,
+    manualPoints: input.status ? null : input.manualPoints,
+    autoPoints: input.status ? 0 : auto,
+    updatedAt: nowIso(),
+    dirty: true,
+  });
+  kickSync(meetId);
 }
