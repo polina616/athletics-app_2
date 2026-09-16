@@ -15,14 +15,31 @@ interface Props {
   onBack?: () => void;
 }
 
-// Возрастные группы теперь задаются раздельно по полу: для каждой
-// дисциплины — отдельный список возрастных групп для юношей и отдельный
-// для девушек (ключ отсутствует/пуст = пол не допущен к дисциплине).
 type EligibilityDraft = Record<string, Partial<Record<Gender, string[]>>>;
 
-// Черновик параметров дисциплин с произвольной дистанцией (лыжи/эстафета) —
-// хранится строками, т.к. это поля <input type="number">.
-type CustomParamsDraft = Record<string, { distanceMeters?: string; legs?: string }>;
+// Дистанция для дисциплин с произвольной дистанцией БЕЗ этапов (лыжи).
+type CustomParamsDraft = Record<string, { distanceMeters?: string }>;
+
+// Черновик эстафеты: число этапов + либо одна общая дистанция этапа
+// (mode "same"), либо своя дистанция для каждого этапа (mode "custom").
+interface RelayDraft {
+  legsCount: string;
+  mode: "same" | "custom";
+  sameDistance: string;
+  legDistances: string[];
+}
+
+const DEFAULT_RELAY_LEGS = 4;
+const DEFAULT_LEG_DISTANCE = "100";
+
+function makeDefaultRelayDraft(): RelayDraft {
+  return {
+    legsCount: String(DEFAULT_RELAY_LEGS),
+    mode: "same",
+    sameDistance: DEFAULT_LEG_DISTANCE,
+    legDistances: Array.from({ length: DEFAULT_RELAY_LEGS }, () => DEFAULT_LEG_DISTANCE),
+  };
+}
 
 const groupIcon: Record<string, (props: any) => JSX.Element> = {
   "Бег": IconRunning,
@@ -41,6 +58,7 @@ export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
   );
   const [eligibility, setEligibility] = useState<EligibilityDraft>({});
   const [customParams, setCustomParams] = useState<CustomParamsDraft>({});
+  const [relayDraft, setRelayDraft] = useState<RelayDraft>(makeDefaultRelayDraft);
 
   const ageGroups = ageGroupsText
     .split("\n")
@@ -53,9 +71,6 @@ export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
       if (next[key]) {
         delete next[key];
       } else {
-        // По умолчанию включаем дисциплину сразу для обоих полов со всеми
-        // текущими возрастными группами — дальше можно раздельно
-        // подправить возрастные группы для юношей и для девушек.
         next[key] = { м: [...ageGroups], ж: [...ageGroups] };
       }
       return next;
@@ -89,8 +104,46 @@ export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
     });
   }
 
-  function setCustomParam(key: string, field: "distanceMeters" | "legs", value: string) {
-    setCustomParams((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
+  function setCustomParam(key: string, value: string) {
+    setCustomParams((prev) => ({ ...prev, [key]: { distanceMeters: value } }));
+  }
+
+  // ---------- эстафета: число этапов + дистанция каждого этапа ----------
+
+  function setRelayLegsCount(value: string) {
+    setRelayDraft((prev) => {
+      const n = Math.max(1, parseInt(value, 10) || 0);
+      const fallback = prev.legDistances[prev.legDistances.length - 1] ?? prev.sameDistance ?? DEFAULT_LEG_DISTANCE;
+      const legDistances = Array.from({ length: n }, (_, i) => prev.legDistances[i] ?? fallback);
+      return { ...prev, legsCount: value, legDistances };
+    });
+  }
+
+  function setRelayMode(mode: "same" | "custom") {
+    setRelayDraft((prev) => ({ ...prev, mode }));
+  }
+
+  function setRelaySameDistance(value: string) {
+    setRelayDraft((prev) => ({ ...prev, sameDistance: value }));
+  }
+
+  function setRelayLegDistance(idx: number, value: string) {
+    setRelayDraft((prev) => {
+      const legDistances = [...prev.legDistances];
+      legDistances[idx] = value;
+      return { ...prev, legDistances };
+    });
+  }
+
+  /** Итоговый массив дистанций этапов с учётом выбранного режима — общая
+   *  дистанция для scoring.ts всегда считается как сумма этого массива. */
+  function resolvedRelayLegDistances(): number[] {
+    const legs = Math.max(1, parseInt(relayDraft.legsCount, 10) || 0);
+    if (relayDraft.mode === "same") {
+      const d = Number(relayDraft.sameDistance) || 0;
+      return Array.from({ length: legs }, () => d);
+    }
+    return relayDraft.legDistances.slice(0, legs).map((d) => Number(d) || 0);
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -100,8 +153,6 @@ export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
       .map((t) => t.trim())
       .filter(Boolean);
 
-    // Разворачиваем черновик в отдельные записи допуска — по одной на
-    // каждый допущенный пол дисциплины, со своим набором возрастных групп.
     const eventEligibility: EventEligibility[] = [];
     for (const [eventKey, byGender] of Object.entries(eligibility)) {
       (Object.keys(byGender) as Gender[]).forEach((g) => {
@@ -112,27 +163,42 @@ export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
       });
     }
 
-    // Дистанция (и, для эстафеты, число этапов) для дисциплин с
+    // Дистанция (и, для эстафеты, разбивка по этапам) для дисциплин с
     // произвольной дистанцией — вводится судьёй здесь же, при создании.
     const eventParams: Record<string, EventCustomParams> = {};
     for (const eventKey of Object.keys(eligibility)) {
       const ev = EVENTS.find((e) => e.key === eventKey);
       if (!ev?.customDistance) continue;
-      const draft = customParams[eventKey];
-      const distanceMeters = draft?.distanceMeters ? Number(draft.distanceMeters) : undefined;
-      const legs = draft?.legs ? Number(draft.legs) : undefined;
-      if (distanceMeters) eventParams[eventKey] = { distanceMeters, ...(legs ? { legs } : {}) };
+
+      if (eventKey === "relay") {
+        const legDistances = resolvedRelayLegDistances();
+        const distanceMeters = legDistances.reduce((s, v) => s + v, 0);
+        if (distanceMeters > 0 && legDistances.every((v) => v > 0)) {
+          eventParams[eventKey] = { distanceMeters, legs: legDistances.length, legDistances };
+        }
+        continue;
+      }
+
+      const distanceMeters = customParams[eventKey]?.distanceMeters
+        ? Number(customParams[eventKey]?.distanceMeters)
+        : undefined;
+      if (distanceMeters) eventParams[eventKey] = { distanceMeters };
     }
 
     const missingDistance = Object.keys(eligibility).some((key) => {
       const ev = EVENTS.find((e) => e.key === key);
-      return ev?.customDistance && !eventParams[key]?.distanceMeters;
+      if (!ev?.customDistance) return false;
+      if (key === "relay") {
+        const p = eventParams[key];
+        return !p || !p.distanceMeters || !p.legDistances?.length || p.legDistances.some((v) => !v);
+      }
+      return !eventParams[key]?.distanceMeters;
     });
 
     if (teams.length === 0 || ageGroups.length === 0 || eventEligibility.length === 0 || missingDistance) {
       alert(
         missingDistance
-          ? "Укажите дистанцию (в метрах) для лыж/эстафеты — без неё оценка очков работать не будет."
+          ? "Укажите дистанцию для лыж/эстафеты (для эстафеты — дистанцию каждого этапа) — без неё оценка очков работать не будет."
           : "Укажите хотя бы одну команду, возрастную группу и дисциплину с хотя бы одним допущенным полом и возрастной группой!"
       );
       return;
@@ -145,6 +211,7 @@ export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
   }
 
   const selectedCount = Object.keys(eligibility).length;
+  const relayTotalDistance = resolvedRelayLegDistances().reduce((s, v) => s + v, 0);
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
@@ -262,33 +329,98 @@ export default function MeetSetup({ ownerId, onCreated, onBack }: Props) {
                             transition={{ duration: 0.2 }}
                             className="pl-6 space-y-3"
                           >
-                            {ev.customDistance && (
-                              <div className="flex flex-wrap gap-3 items-end">
-                                <div>
-                                  <label className="field-label !mb-1">Дистанция (метры)</label>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    required
-                                    placeholder="напр. 1000"
-                                    value={customParams[ev.key]?.distanceMeters ?? ""}
-                                    onChange={(e) => setCustomParam(ev.key, "distanceMeters", e.target.value)}
-                                    className="field num !w-32"
-                                  />
-                                </div>
-                                {ev.key === "relay" && (
+                            {ev.customDistance && ev.key === "relay" && (
+                              <div className="space-y-2.5 surface-inset rounded-lg p-3 border border-white/10">
+                                <div className="flex flex-wrap items-end gap-3">
                                   <div>
                                     <label className="field-label !mb-1">Число этапов</label>
                                     <input
                                       type="number"
                                       min={1}
+                                      required
                                       placeholder="напр. 4"
-                                      value={customParams[ev.key]?.legs ?? ""}
-                                      onChange={(e) => setCustomParam(ev.key, "legs", e.target.value)}
+                                      value={relayDraft.legsCount}
+                                      onChange={(e) => setRelayLegsCount(e.target.value)}
                                       className="field num !w-24"
                                     />
                                   </div>
+
+                                  <div className="flex items-center gap-3 pb-2.5">
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold uppercase tracking-wide text-muted">
+                                      <input
+                                        type="radio"
+                                        name={`relay-mode-${ev.key}`}
+                                        checked={relayDraft.mode === "same"}
+                                        onChange={() => setRelayMode("same")}
+                                        className="accent-track"
+                                      />
+                                      Все этапы одинаковые
+                                    </label>
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold uppercase tracking-wide text-muted">
+                                      <input
+                                        type="radio"
+                                        name={`relay-mode-${ev.key}`}
+                                        checked={relayDraft.mode === "custom"}
+                                        onChange={() => setRelayMode("custom")}
+                                        className="accent-track"
+                                      />
+                                      Разные дистанции
+                                    </label>
+                                  </div>
+                                </div>
+
+                                {relayDraft.mode === "same" ? (
+                                  <div>
+                                    <label className="field-label !mb-1">Дистанция этапа (метры)</label>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      required
+                                      placeholder="напр. 100"
+                                      value={relayDraft.sameDistance}
+                                      onChange={(e) => setRelaySameDistance(e.target.value)}
+                                      className="field num !w-32"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                    <label className="field-label !mb-1">Дистанция каждого этапа (метры)</label>
+                                    <div className="flex flex-wrap gap-2">
+                                      {relayDraft.legDistances.map((d, idx) => (
+                                        <div key={idx} className="flex items-center gap-1">
+                                          <span className="text-[10px] text-muted num">{idx + 1}.</span>
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            required
+                                            value={d}
+                                            onChange={(e) => setRelayLegDistance(idx, e.target.value)}
+                                            className="field num !w-20 !py-1 !text-xs"
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
                                 )}
+
+                                <p className="text-[11px] text-muted num">
+                                  Общая дистанция эстафеты: {relayTotalDistance} м
+                                </p>
+                              </div>
+                            )}
+
+                            {ev.customDistance && ev.key !== "relay" && (
+                              <div>
+                                <label className="field-label !mb-1">Дистанция (метры)</label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  required
+                                  placeholder="напр. 1000"
+                                  value={customParams[ev.key]?.distanceMeters ?? ""}
+                                  onChange={(e) => setCustomParam(ev.key, e.target.value)}
+                                  className="field num !w-32"
+                                />
                               </div>
                             )}
 
