@@ -77,6 +77,29 @@ create table if not exists public.entries (
   updated_at      timestamptz not null default now(),
   deleted         boolean not null default false
 );
+-- ---------- RELAY TEAMS ----------
+create table if not exists public.relay_teams (
+  id              uuid primary key,
+  meet_id         uuid not null references public.meets(id) on delete cascade,
+  team_id         uuid not null references public.teams(id) on delete cascade,
+  age_group       text not null,
+  gender          text not null,
+  leg_athlete_ids text[] not null default '{}',
+  status          text,
+  result_raw      text not null default '',
+  result_seconds  numeric,
+  manual_points   integer,
+  auto_points     integer,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  deleted         boolean not null default false
+);
+
+create index if not exists relay_teams_meet_idx on public.relay_teams(meet_id);
+
+drop trigger if exists trg_relay_teams_updated on public.relay_teams;
+create trigger trg_relay_teams_updated before update on public.relay_teams
+  for each row execute function public.touch_updated_at();
 
 create index if not exists teams_meet_idx on public.teams(meet_id);
 create index if not exists athletes_meet_idx on public.athletes(meet_id);
