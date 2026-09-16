@@ -180,8 +180,14 @@ export const EVENT_GROUPS: { label: string; events: EventConfig[] }[] = [
 
 export function getEvent(key: string): EventConfig {
   const ev = EVENTS.find((e) => e.key === key);
-  if (!ev) throw new Error(`Unknown event key: ${key}`);
-  return ev;
+  if (ev) return ev;
+  console.warn(`[scoring] Unknown event key: "${key}" — using placeholder config.`);
+  return {
+    key,
+    name: `Неизвестная дисциплина (${key})`,
+    cat: "track",
+    unitHint: "",
+  };
 }
 
 /** Парсит то, что судья ввёл вручную, в нормализованное число (секунды,
