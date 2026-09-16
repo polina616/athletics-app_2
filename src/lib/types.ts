@@ -51,6 +51,7 @@ export interface EventEligibility {
 export interface EventCustomParams {
   distanceMeters?: number;
   legs?: number;
+  legDistances?: number[];
 }
 
 /** Спортсмен сохраняется один раз и переиспользуется во всех видах —
