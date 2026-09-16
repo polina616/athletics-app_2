@@ -4,6 +4,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/scoring";
 import { Gender } from "@/lib/types";
+import { EVENTS } from "@/lib/scoring";
 
 interface Props {
   meetId: string;
@@ -25,7 +26,9 @@ export default function AthleteCoverage({ meetId }: Props) {
   // своими возрастными группами (см. MeetSetup) — тогда в eventEligibility
   // для одного eventKey будет несколько записей. Берём уникальный список
   // дисциплин и проверяем допуск по ЛЮБОЙ подходящей записи.
-  const eventKeys = Array.from(new Set(meet.eventEligibility.map((el) => el.eventKey)));
+  const eventKeys = Array.from(
+  new Set(meet.eventEligibility.map((el) => el.eventKey))
+).filter((key) => EVENTS.some((e) => e.key === key));
 
   function isEligible(eventKey: string, ag: string, g: Gender) {
     return meet!.eventEligibility.some(
