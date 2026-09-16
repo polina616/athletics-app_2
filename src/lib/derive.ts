@@ -1,4 +1,4 @@
-import { Athlete, Entry, Gender, Team } from "./types";
+import { Athlete, Entry, Gender, RelayTeam, Team } from "./types";
 import { getEvent } from "./scoring";
 
 export interface PointsResult {
@@ -57,20 +57,60 @@ export function protocolRows(entries: Entry[], eventKey: string, ageGroup: strin
 
   return [...validRows, ...invalidRows];
 }
+export function pointsForRelayTeam(rt: RelayTeam): PointsResult {
+  if (rt.status) return { pts: 0, source: "status" };
+  if (rt.manualPoints !== null && rt.manualPoints !== undefined) {
+    return { pts: Math.round(rt.manualPoints), source: "official" };
+  }
+  return { pts: rt.autoPoints, source: "estimate" };
+}
+
+export interface RelayProtocolRow {
+  relayTeam: RelayTeam;
+  pts: number;
+  source: PointsResult["source"];
+  place: number | null;
+}
+
+export function relayProtocolRows(relayTeams: RelayTeam[], ageGroup: string, gender: Gender): RelayProtocolRow[] {
+  const rows = relayTeams.filter((r) => !r.deleted && r.ageGroup === ageGroup && r.gender === gender);
+  const valid = rows.filter((r) => !r.status && r.resultSeconds !== null);
+  const invalid = rows.filter((r) => r.status || r.resultSeconds === null);
+
+  valid.sort((a, b) => (a.resultSeconds as number) - (b.resultSeconds as number));
+
+  const validRows = valid.map((relayTeam, idx) => {
+    const { pts, source } = pointsForRelayTeam(relayTeam);
+    return { relayTeam, pts, source, place: idx + 1 };
+  });
+  const invalidRows = invalid.map((relayTeam) => {
+    const { pts, source } = pointsForRelayTeam(relayTeam);
+    return { relayTeam, pts, source, place: null };
+  });
+  return [...validRows, ...invalidRows];
+}
 
 export interface TeamStanding {
   teamId: string;
   teamName: string;
   total: number;
 }
-
-export function computeTeamStandings(entries: Entry[], teams: Team[]): TeamStanding[] {
+export function computeTeamStandings(
+  entries: Entry[],
+  teams: Team[],
+  relayTeams: RelayTeam[] = []
+): TeamStanding[] {
   const totals = new Map<string, number>();
   for (const t of teams) totals.set(t.id, 0);
   for (const e of entries) {
     if (e.deleted) continue;
     const { pts } = pointsForEntry(e);
     totals.set(e.teamId, (totals.get(e.teamId) ?? 0) + pts);
+  }
+  for (const r of relayTeams) {
+    if (r.deleted) continue;
+    const { pts } = pointsForRelayTeam(r);
+    totals.set(r.teamId, (totals.get(r.teamId) ?? 0) + pts);
   }
   return teams
     .map((t) => ({ teamId: t.id, teamName: t.name, total: totals.get(t.id) ?? 0 }))
@@ -98,10 +138,12 @@ export interface TeamBreakdown {
 
 /** Подробная раскладка командного результата: какая дисциплина/спортсмен
  *  сколько очков принёс в общий итог команды, плюс место в протоколе. */
-export function teamBreakdowns(entries: Entry[], teams: Team[]): TeamBreakdown[] {
-  // Считаем место КАЖДОГО результата один раз — прогоняем protocolRows()
-  // по каждой уникальной паре (дисциплина, возраст, пол), встречающейся
-  // среди результатов, и запоминаем place по id записи.
+export function teamBreakdowns(
+  entries: Entry[],
+  teams: Team[],
+  relayTeams: RelayTeam[] = [],
+  athletes: Athlete[] = []
+): TeamBreakdown[] {
   const placeByEntryId = new Map<string, number | null>();
   const combos = new Map<string, { eventKey: string; ageGroup: string; gender: Gender }>();
   for (const e of entries) {
@@ -114,6 +156,20 @@ export function teamBreakdowns(entries: Entry[], teams: Team[]): TeamBreakdown[]
       placeByEntryId.set(row.entry.id, row.place);
     }
   }
+
+  const relayPlaceById = new Map<string, number | null>();
+  const relayCombos = new Map<string, { ageGroup: string; gender: Gender }>();
+  for (const r of relayTeams) {
+    if (r.deleted) continue;
+    const key = `${r.ageGroup}__${r.gender}`;
+    if (!relayCombos.has(key)) relayCombos.set(key, { ageGroup: r.ageGroup, gender: r.gender });
+  }
+  for (const { ageGroup, gender } of relayCombos.values()) {
+    for (const row of relayProtocolRows(relayTeams, ageGroup, gender)) {
+      relayPlaceById.set(row.relayTeam.id, row.place);
+    }
+  }
+  const athleteName = (id: string) => athletes.find((a) => a.id === id)?.fullName ?? "—";
 
   return teams
     .map((t) => {
@@ -132,9 +188,27 @@ export function teamBreakdowns(entries: Entry[], teams: Team[]): TeamBreakdown[]
             pts,
             place: placeByEntryId.get(e.id) ?? null,
           };
-        })
-        .sort((a, b) => b.pts - a.pts);
-      return { teamId: t.id, teamName: t.name, total: rows.reduce((s, r) => s + r.pts, 0), rows };
+        });
+
+      const relayRows: TeamBreakdownRow[] = relayTeams
+        .filter((r) => !r.deleted && r.teamId === t.id)
+        .map((r) => {
+          const { pts } = pointsForRelayTeam(r);
+          return {
+            eventKey: "relay",
+            athleteName: r.legAthleteIds.map((id) => (id ? athleteName(id) : "—")).join(" / "),
+            bib: null,
+            ageGroup: r.ageGroup,
+            gender: r.gender,
+            status: r.status,
+            resultRaw: r.resultRaw,
+            pts,
+            place: relayPlaceById.get(r.id) ?? null,
+          };
+        });
+
+      const allRows = [...rows, ...relayRows].sort((a, b) => b.pts - a.pts);
+      return { teamId: t.id, teamName: t.name, total: allRows.reduce((s, r) => s + r.pts, 0), rows: allRows };
     })
     .sort((a, b) => b.total - a.total);
 }
@@ -217,19 +291,27 @@ export interface EventTeamStanding {
  *  computeTeamStandings(), но entries фильтруются по одной дисциплине за
  *  раз. Возвращает список только по тем дисциплинам, где вообще есть
  *  результаты (хотя бы у одной команды), отсортированный по названию. */
-export function teamStandingsByEvent(entries: Entry[], teams: Team[]): EventTeamStanding[] {
-  const eventKeys = Array.from(
-    new Set(entries.filter((e) => !e.deleted).map((e) => e.eventKey))
-  );
+export function teamStandingsByEvent(
+  entries: Entry[],
+  teams: Team[],
+  relayTeams: RelayTeam[] = []
+): EventTeamStanding[] {
+  const eventKeys = Array.from(new Set(entries.filter((e) => !e.deleted).map((e) => e.eventKey)));
 
-  return eventKeys
-    .map((eventKey) => ({
-      eventKey,
-      eventName: getEvent(eventKey).name,
-      standings: computeTeamStandings(
-        entries.filter((e) => e.eventKey === eventKey),
-        teams
-      ),
-    }))
-    .sort((a, b) => a.eventName.localeCompare(b.eventName, "ru"));
+  const result = eventKeys.map((eventKey) => ({
+    eventKey,
+    eventName: getEvent(eventKey).name,
+    standings: computeTeamStandings(entries.filter((e) => e.eventKey === eventKey), teams),
+  }));
+
+  const activeRelayTeams = relayTeams.filter((r) => !r.deleted);
+  if (activeRelayTeams.length > 0) {
+    result.push({
+      eventKey: "relay",
+      eventName: getEvent("relay").name,
+      standings: computeTeamStandings([], teams, activeRelayTeams),
+    });
+  }
+
+  return result.sort((a, b) => a.eventName.localeCompare(b.eventName, "ru"));
 }
