@@ -7,7 +7,13 @@ alter table public.meets    enable row level security;
 alter table public.teams    enable row level security;
 alter table public.athletes enable row level security;
 alter table public.entries  enable row level security;
+alter table public.relay_teams enable row level security;
 
+drop policy if exists "relay_teams_owner_all" on public.relay_teams;
+create policy "relay_teams_owner_all"
+  on public.relay_teams for all
+  using (exists (select 1 from public.meets m where m.id = relay_teams.meet_id and m.owner_id = auth.uid()))
+  with check (exists (select 1 from public.meets m where m.id = relay_teams.meet_id and m.owner_id = auth.uid()));
 -- MEETS: owner has full access
 drop policy if exists "meets_owner_all" on public.meets;
 create policy "meets_owner_all"
