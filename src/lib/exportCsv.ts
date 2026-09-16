@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { computeTeamStandings, pointsForEntry } from "./derive";
+import { computeTeamStandings, pointsForEntry, pointsForRelayTeam } from "./derive";
 import { getEvent } from "./scoring";
 import { STATUS_LABELS } from "./types";
 
@@ -30,11 +30,34 @@ export async function exportCsv(meetId: string): Promise<void> {
       source === "official" ? "официальные" : source === "estimate" ? "оценка" : "—",
     ];
   });
+   const relayTeams = (await db.relayTeams.where({ meetId }).toArray()).filter((r) => !r.deleted);
+  const athletes = (await db.athletes.where({ meetId }).toArray()).filter((a) => !a.deleted);
+  const athleteLabel = (id: string) => {
+    const a = athletes.find((x) => x.id === id);
+    return a ? `${a.bib ?? ""} ${a.fullName}`.trim() : "—";
+  };
 
-  const standings = computeTeamStandings(entries, teams);
+  const relayRows = relayTeams.map((r) => {
+    const ev = getEvent("relay");
+    const { pts, source } = pointsForRelayTeam(r);
+    return [
+      "",
+      ev.name,
+      r.ageGroup,
+      r.gender,
+      teamName(r.teamId),
+      r.legAthleteIds.map((id) => (id ? athleteLabel(id) : "—")).join(" / "),
+      r.status ? "" : r.resultRaw,
+      r.status ? STATUS_LABELS[r.status] : "ОК",
+      pts,
+      source === "official" ? "официальные" : source === "estimate" ? "оценка" : "—",
+    ];
+  });
+
+  const standings = computeTeamStandings(entries, teams, relayTeams);
   const standingsRows = standings.map((s, i) => ["", "", "", "", "", `${i + 1}. ${s.teamName}`, "", "", s.total, ""]);
 
-  const all = [header, ...rows, [], ["", "", "", "", "", "Командный зачёт", "", "", "", ""], ...standingsRows];
+  const all = [header, ...rows, ...relayRows, [], ["", "", "", "", "", "Командный зачёт", "", "", "", ""], ...standingsRows];
   const csv = all.map((r) => r.map(csvCell).join(",")).join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
