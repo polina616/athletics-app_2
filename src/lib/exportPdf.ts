@@ -51,19 +51,22 @@ function resultText(eventKey: string, entry: Entry): string {
   return `${entry.resultSeconds ?? "—"} м`;
 }
 
+// Компактные размеры шрифта/отступов — раньше таблицы принудительно
+// растягивались на всю ширину страницы, из-за чего казались огромными.
+// Теперь ширина картинки в PDF считается от реального размера контента
+// (см. renderToCanvas/exportPdf), поэтому крупный шрифт больше не нужен.
 const TABLE_CSS = `
   <style>
     * { box-sizing: border-box; }
     .pp-block { font-family: Arial, 'Helvetica Neue', sans-serif; color: #000; }
-    .pp-title { text-align:center; font-size:16px; font-weight:700; margin:0 0 2px; text-transform:uppercase; }
-    .pp-subtitle { text-align:center; font-size:11px; margin:0 0 14px; color:#333; }
-    .pp-h { font-size:13px; font-weight:700; margin:0 0 6px; text-transform:uppercase; }
-    table.pp-table { width:100%; border-collapse:collapse; margin-bottom:14px; font-size:10px; }
-    table.pp-table th, table.pp-table td { border:1px solid #000; padding:3px 5px; }
+    .pp-title { text-align:center; font-size:15px; font-weight:700; margin:0 0 2px; text-transform:uppercase; white-space:nowrap; }
+    .pp-subtitle { text-align:center; font-size:9.5px; margin:0 0 10px; color:#333; white-space:nowrap; }
+    .pp-h { font-size:11px; font-weight:700; margin:0 0 5px; text-transform:uppercase; white-space:nowrap; }
+    table.pp-table { border-collapse:collapse; margin-bottom:10px; font-size:8.5px; }
+    table.pp-table th, table.pp-table td { border:1px solid #000; padding:2px 4px; white-space:nowrap; }
     table.pp-table th { background:#e5e5e5; font-weight:700; text-align:center; }
     td.pp-left { text-align:left; }
     td.pp-center { text-align:center; }
-    .pp-sign { display:flex; justify-content:space-between; margin-top:24px; font-size:11px; font-weight:700; }
   </style>
 `;
 
@@ -172,6 +175,65 @@ function buildRelayHtml(meet: Meet, relayTeams: RelayTeam[], teams: Team[], athl
   `;
 }
 
+/** Командные места ОТДЕЛЬНО для одного пола — по каждой дисциплине свой
+ *  столбец очков, плюс итог и место. Раньше в приложении разбивка по
+ *  дисциплинам считалась только "по обеим командам сразу" (см.
+ *  teamStandingsByEvent в derive.ts); здесь — специально для PDF-выгрузки,
+ *  строго в рамках одного пола. */
+function buildGenderStandingsHtml(
+  entries: Entry[],
+  relayTeams: RelayTeam[],
+  teams: Team[],
+  gender: Gender
+): string {
+  const genderEntries = entries.filter((e) => !e.deleted && e.gender === gender);
+  const genderRelay = relayTeams.filter((r) => !r.deleted && r.gender === gender);
+
+  const eventKeys = Array.from(new Set(genderEntries.map((e) => e.eventKey)));
+  const orderedKeys = EVENTS.filter((e) => eventKeys.includes(e.key)).map((e) => e.key);
+  const hasRelay = genderRelay.length > 0;
+
+  if (orderedKeys.length === 0 && !hasRelay) return "";
+
+  const sumForTeamEvent = (teamId: string, eventKey: string) =>
+    genderEntries
+      .filter((e) => e.teamId === teamId && e.eventKey === eventKey)
+      .reduce((s, e) => s + pointsForEntry(e).pts, 0);
+  const sumRelayForTeam = (teamId: string) =>
+    genderRelay.filter((r) => r.teamId === teamId).reduce((s, r) => s + pointsForRelayTeam(r).pts, 0);
+
+  const rows = teams.map((t) => {
+    const cells = orderedKeys.map((k) => sumForTeamEvent(t.id, k));
+    const relayPts = hasRelay ? sumRelayForTeam(t.id) : 0;
+    const total = cells.reduce((s, v) => s + v, 0) + relayPts;
+    return { team: t, cells, relayPts, total };
+  });
+  rows.sort((a, b) => b.total - a.total || a.team.name.localeCompare(b.team.name, "ru"));
+
+  const headCells =
+    orderedKeys.map((k) => `<th>${esc(getEvent(k).name)}</th>`).join("") +
+    (hasRelay ? `<th>${esc(getEvent("relay").name)}</th>` : "");
+
+  const bodyRows = rows
+    .map((r, idx) => {
+      const cellsHtml =
+        r.cells.map((v) => `<td class="pp-center">${v}</td>`).join("") +
+        (hasRelay ? `<td class="pp-center">${r.relayPts}</td>` : "");
+      return `<tr><td class="pp-center">${idx + 1}</td><td class="pp-left">${esc(
+        r.team.name
+      )}</td>${cellsHtml}<td class="pp-center"><b>${r.total}</b></td></tr>`;
+    })
+    .join("");
+
+  return `
+    <div class="pp-h">Командные места по дисциплинам — ${gender === "м" ? "Юноши" : "Девушки"}</div>
+    <table class="pp-table">
+      <thead><tr><th>Место</th><th>Команда</th>${headCells}<th>Итого</th></tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>
+  `;
+}
+
 function buildDisciplineBlocks(meet: Meet, entries: Entry[], teams: Team[]): string[] {
   const teamName = (id: string) => teams.find((t) => t.id === id)?.name ?? "—";
   const eventKeys = Array.from(new Set(meet.eventEligibility.map((el) => el.eventKey))).filter(
@@ -211,22 +273,45 @@ function buildDisciplineBlocks(meet: Meet, entries: Entry[], teams: Team[]): str
   return blocks;
 }
 
-async function renderToCanvas(html: string, width = 760) {
+/** Рендерит HTML-фрагмент в canvas, ЖЁСТКО отслеживая реальный размер
+ *  контента: контейнер не получает фиксированную ширину, а сам "садится"
+ *  по контенту (shrink-to-fit у position:fixed), после чего мы передаём
+ *  html2canvas точный scrollWidth/scrollHeight — иначе таблица шире
+ *  контейнера просто обрезается по правому краю (это и была причина
+ *  обрезанной первой таблицы и подписей). */
+async function renderToCanvas(html: string): Promise<{ canvas: HTMLCanvasElement; widthPx: number }> {
   const html2canvas = (await import("html2canvas")).default;
   const el = document.createElement("div");
   el.style.position = "fixed";
   el.style.left = "-99999px";
   el.style.top = "0";
-  el.style.width = `${width}px`;
   el.style.background = "#ffffff";
+  el.style.display = "inline-block";
   el.innerHTML = TABLE_CSS + `<div class="pp-block">${html}</div>`;
   document.body.appendChild(el);
   try {
-    return await html2canvas(el, { scale: 2, backgroundColor: "#ffffff" });
+    // Даём браузеру посчитать layout перед измерением.
+    const widthPx = Math.ceil(el.scrollWidth);
+    const heightPx = Math.ceil(el.scrollHeight);
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      width: widthPx,
+      height: heightPx,
+      windowWidth: widthPx,
+      windowHeight: heightPx,
+    });
+    return { canvas, widthPx };
   } finally {
     document.body.removeChild(el);
   }
 }
+
+// 1 CSS-пиксель (96dpi) = 0.75pt (72dpi) — используем эту величину, чтобы
+// таблицы в PDF имели естественный, а не растянутый на всю ширину листа
+// размер. Слишком широкие таблицы (например общая сводная) всё равно
+// вписываются по ширине страницы за счёт cap'а на usableWidth ниже.
+const PX_TO_PT = 0.75;
 
 export async function exportPdf(meetId: string): Promise<void> {
   const meet = await db.meets.get(meetId);
@@ -244,20 +329,22 @@ export async function exportPdf(meetId: string): Promise<void> {
   `;
   const overviewHtml = buildOverviewHtml(meet, teams, entries);
   const relayHtml = relayTeams.length ? buildRelayHtml(meet, relayTeams, teams, athletes) : "";
+  const boysStandingsHtml = buildGenderStandingsHtml(entries, relayTeams, teams, "м");
+  const girlsStandingsHtml = buildGenderStandingsHtml(entries, relayTeams, teams, "ж");
   const disciplineBlocks = buildDisciplineBlocks(meet, entries, teams);
-  const signHtml = `
-    <div class="pp-sign">
-      <div>Главный судья соревнований _____________________</div>
-      <div>Главный секретарь соревнований _____________________</div>
-    </div>
-  `;
 
-  const blocksHtml = [titleHtml + overviewHtml, relayHtml, ...disciplineBlocks, signHtml].filter(Boolean);
+  const blocksHtml = [
+    titleHtml + overviewHtml,
+    relayHtml,
+    boysStandingsHtml,
+    girlsStandingsHtml,
+    ...disciplineBlocks,
+  ].filter(Boolean);
 
   const pdf = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const margin = 24;
+  const margin = 30;
   const usableWidth = pageWidth - margin * 2;
   const maxHeight = pageHeight - margin * 2;
 
@@ -265,20 +352,26 @@ export async function exportPdf(meetId: string): Promise<void> {
   let pageHasContent = false;
 
   for (const html of blocksHtml) {
-    const canvas = await renderToCanvas(html);
-    const imgHeight = (canvas.height * usableWidth) / canvas.width;
+    const { canvas, widthPx } = await renderToCanvas(html);
 
-    if (imgHeight <= maxHeight) {
-      if (pageHasContent && cursorY + imgHeight > pageHeight - margin) {
+    // Естественный размер блока в pt, но не шире полезной ширины страницы.
+    const naturalWidthPt = widthPx * PX_TO_PT;
+    const imgWidthPt = Math.min(naturalWidthPt, usableWidth);
+    const imgHeightPt = imgWidthPt * (canvas.height / canvas.width);
+    const x = margin + (usableWidth - imgWidthPt) / 2;
+
+    if (imgHeightPt <= maxHeight) {
+      if (pageHasContent && cursorY + imgHeightPt > pageHeight - margin) {
         pdf.addPage();
         cursorY = margin;
       }
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, cursorY, usableWidth, imgHeight);
-      cursorY += imgHeight + 10;
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", x, cursorY, imgWidthPt, imgHeightPt);
+      cursorY += imgHeightPt + 12;
       pageHasContent = true;
     } else {
-      // Блок выше страницы — режем на части.
-      const pxPerPageHeight = (maxHeight * canvas.width) / usableWidth;
+      // Блок выше страницы целиком (очень длинная таблица) — режем по
+      // высоте на несколько страниц при выбранной ширине imgWidthPt.
+      const pxPerPageHeight = (maxHeight * canvas.width) / imgWidthPt;
       let sy = 0;
       while (sy < canvas.height) {
         if (pageHasContent) {
@@ -291,13 +384,32 @@ export async function exportPdf(meetId: string): Promise<void> {
         sliceCanvas.height = sliceHeightPx;
         const ctx = sliceCanvas.getContext("2d")!;
         ctx.drawImage(canvas, 0, sy, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
-        const sliceImgHeight = (sliceHeightPx * usableWidth) / canvas.width;
-        pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", margin, margin, usableWidth, sliceImgHeight);
+        const sliceImgHeightPt = (sliceHeightPx * imgWidthPt) / canvas.width;
+        pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", x, margin, imgWidthPt, sliceImgHeightPt);
         sy += sliceHeightPx;
         pageHasContent = true;
       }
+      cursorY = margin;
     }
   }
+
+  // Подписи — настоящим векторным текстом PDF, а не картинкой: это
+  // полностью исключает обрезание по краю, которое было при рендере
+  // через html2canvas с фиксированной шириной контейнера.
+  const signY = pageHeight - margin - 10;
+  if (cursorY > signY - 20) {
+    pdf.addPage();
+  }
+  const finalSignY = pdf.internal.pages.length > 1 && cursorY > signY - 20 ? pageHeight - margin - 10 : Math.max(cursorY + 20, signY);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10);
+  pdf.text("Главный судья соревнований _____________________", margin, finalSignY);
+  pdf.text(
+    "Главный секретарь соревнований _____________________",
+    pageWidth - margin,
+    finalSignY,
+    { align: "right" }
+  );
 
   pdf.save(`${meet.name ?? "meet"}.pdf`);
 }
