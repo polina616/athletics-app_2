@@ -79,6 +79,31 @@ export default function RelayTeamModal({
     }
     onClose();
   }
+  export async function deleteAthlete(id: string, meetId: string): Promise<void> {
+  const a = await db.athletes.get(id);
+  if (!a) return;
+  await db.athletes.put({ ...a, deleted: true, updatedAt: nowIso(), dirty: true });
+
+  // Убираем удалённого спортсмена из составов эстафетных команд — иначе
+  // legAthleteIds хранит "протухший" id, который не виден в выпадающем
+  // списке RelayTeamModal, но может случайно "утечь" обратно при
+  // сохранении состава без изменения именно этого этапа.
+  const affectedRelayTeams = await db.relayTeams
+    .where({ meetId })
+    .filter((r) => !r.deleted && r.legAthleteIds.includes(id))
+    .toArray();
+
+  if (affectedRelayTeams.length) {
+    await db.transaction("rw", db.relayTeams, async () => {
+      for (const rt of affectedRelayTeams) {
+        const legAthleteIds = rt.legAthleteIds.map((legId) => (legId === id ? "" : legId));
+        await db.relayTeams.update(rt.id, { legAthleteIds, updatedAt: nowIso(), dirty: true });
+      }
+    });
+  }
+
+  kickSync(meetId);
+}
 
   const filledCount = legs.filter(Boolean).length;
 
