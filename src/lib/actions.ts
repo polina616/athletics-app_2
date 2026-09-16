@@ -63,10 +63,11 @@ export async function deleteMeet(meetId: string): Promise<void> {
     await db.entries.where({ meetId }).delete();
     await db.athletes.where({ meetId }).delete();
     await db.teams.where({ meetId }).delete();
+    await db.relayTeams.where({ meetId }).delete();
     await db.meets.delete(meetId);
   });
 
-  try {
+   try {
     const { error } = await supabase.from("meets").delete().eq("id", meetId);
     if (error) throw error;
   } catch (err) {
