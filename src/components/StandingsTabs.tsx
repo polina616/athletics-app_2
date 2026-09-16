@@ -14,6 +14,7 @@ import EmptyState from "./ui/EmptyState";
 import { IconMedal } from "./ui/icons";
 import RelayProtocolTable from "./RelayProtocolTable";
 
+
 type Tab = "protocols" | "individual" | "teams" | "charts";
 
 export default function StandingsTabs({ meetId }: { meetId: string }) {
@@ -38,7 +39,9 @@ export default function StandingsTabs({ meetId }: { meetId: string }) {
     return <div className="skeleton h-64 rounded-xl2" />;
   }
 
-  const eventKeys = Array.from(new Set(meet.eventEligibility.map((el) => el.eventKey)));
+  const eventKeys = Array.from(new Set(meet.eventEligibility.map((el) => el.eventKey))).filter((key) =>
+  EVENTS.some((e) => e.key === key)
+);
   const currentEvent = selectedEvent && eventKeys.includes(selectedEvent) ? selectedEvent : eventKeys[0];
   const allAroundByCategory = personalAllAround(entries, athletes, teams);
 
