@@ -48,8 +48,11 @@ function BibCell({ athlete, meetId }: { athlete: Athlete; meetId: string }) {
 }
 export default function AthletesList({ meetId }: { meetId: string }) {
   const [editingAthlete, setEditingAthlete] = useState<Athlete | null>(null);
-  // Свёрнутые команды — по умолчанию все развёрнуты, пусто = ничего не свёрнуто.
+  // Свёрнутые команды — изначально свёрнуты ВСЕ (см. эффект ниже, который
+  // заполняет набор id команд один раз, как только список команд известен).
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(new Set());
+  const [collapsedInitialized, setCollapsedInitialized] = useState(false);
+  const [search, setSearch] = useState("");
 
   const athletes = useLiveQuery(
     () => db.athletes.where({ meetId }).filter((a) => !a.deleted).toArray(),
@@ -63,6 +66,17 @@ export default function AthletesList({ meetId }: { meetId: string }) {
     () => db.entries.where({ meetId }).filter((e) => !e.deleted).toArray(),
     [meetId]
   );
+
+  // Как только список команд загрузился впервые — сворачиваем их все разом.
+  // Делаем это ровно один раз за сеанс (флаг collapsedInitialized), чтобы
+  // потом судья мог свободно разворачивать/сворачивать конкретные команды
+  // без того, чтобы фоновая синхронизация (см. SyncStatus.tsx) сбрасывала
+  // его выбор обратно.
+  useEffect(() => {
+    if (collapsedInitialized || !teams) return;
+    setCollapsedTeams(new Set(teams.map((t) => t.id)));
+    setCollapsedInitialized(true);
+  }, [teams, collapsedInitialized]);
 
   const teamName = (id: string) => teams?.find((t) => t.id === id)?.name ?? "—";
 
@@ -101,10 +115,18 @@ export default function AthletesList({ meetId }: { meetId: string }) {
     eventsByAthlete.set(e.athleteId, list);
   }
 
+  const q = search.trim().toLowerCase();
+  const matchesQuery = (a: Athlete) =>
+    !q || a.fullName.toLowerCase().includes(q);
+
   // Группируем спортсменов по команде — каждая команда своим блоком,
-  // внутри блока как раньше: пол → возраст → ФИО.
+  // внутри блока как раньше: пол → возраст → ФИО. Поиск по ФИО фильтрует
+  // спортсменов внутри команды и скрывает команды, где ничего не найдено —
+  // при активном поиске так проще найти нужного человека, не разворачивая
+  // все команды подряд вручную.
   const byTeam = new Map<string, Athlete[]>();
   for (const a of athletes) {
+    if (!matchesQuery(a)) continue;
     const list = byTeam.get(a.teamId) ?? [];
     list.push(a);
     byTeam.set(a.teamId, list);
@@ -123,6 +145,8 @@ export default function AthletesList({ meetId }: { meetId: string }) {
     }))
     .sort((a, b) => a.name.localeCompare(b.name, "ru"));
 
+  const totalMatches = q ? teamGroups.reduce((s, g) => s + g.athletes.length, 0) : null;
+
   return (
     <div className="card-flat p-5 rounded-xl space-y-4">
       <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -134,102 +158,121 @@ export default function AthletesList({ meetId }: { meetId: string }) {
         </span>
       </div>
 
-      <div className="max-h-[32rem] overflow-y-auto space-y-3 pr-1">
-        {teamGroups.map(({ teamId, name, athletes: teamAthletes }, idx) => {
-          const collapsed = collapsedTeams.has(teamId);
-          return (
-            <motion.div
-              key={teamId}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.3) }}
-              className="border border-white/10 rounded-lg surface-inset overflow-hidden"
-            >
-              <button
-                onClick={() => toggleTeam(teamId)}
-                className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-white/[0.04] transition"
-              >
-                <span className="font-bold text-sm">{name}</span>
-                <span className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold num bg-white/10 text-muted px-2 py-0.5 rounded-full">
-                    {teamAthletes.length}
-                  </span>
-                  <motion.span
-                    animate={{ rotate: collapsed ? 0 : 180 }}
-                    transition={{ duration: 0.2 }}
-                    className="text-xs text-muted"
-                  >
-                    ▼
-                  </motion.span>
-                </span>
-              </button>
+      <div className="space-y-1">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Поиск по ФИО спортсмена..."
+          className="field !text-xs"
+        />
+        {q && (
+          <p className="text-[11px] text-muted num">
+            {totalMatches ? `Найдено: ${totalMatches}` : "Ничего не найдено по этому запросу."}
+          </p>
+        )}
+      </div>
 
-              {!collapsed && (
-                <div className="overflow-x-auto border-t border-white/10">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-[var(--surface)] border-b border-white/10 text-muted uppercase font-bold text-[10px] tracking-wide">
-                      <tr>
-                        <th className="py-2 px-3 w-14">№</th>
-                        <th className="py-2 px-3">ФИО</th>
-                        <th className="py-2 px-3">Категория</th>
-                        <th className="py-2 px-3">Дисциплины</th>
-                        <th className="py-2 px-3 text-right">Действие</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {teamAthletes.map((a) => {
-                        const eventKeys = eventsByAthlete.get(a.id) ?? [];
-                        return (
-                          <tr key={a.id} className="group hover:bg-white/[0.04] transition-colors">
-                            <td className="py-2 px-3 align-top">
-                              <BibCell athlete={a} meetId={meetId} />
-                            </td>
-                            <td className="py-2 px-3 font-medium align-top">{a.fullName}</td>
-                            <td className="py-2 px-3 align-top">
-                              {a.ageGroup} ({a.gender === "м" ? "Ю" : "Д"})
-                            </td>
-                            <td className="py-2 px-3 align-top">
-                              {eventKeys.length === 0 ? (
-                                <span className="text-muted italic">нет результатов</span>
-                              ) : (
-                                <div className="flex flex-wrap gap-1">
-                                  {eventKeys.map((key) => (
-                                    <span
-                                      key={key}
-                                      className="px-1.5 py-0.5 rounded bg-blue/10 text-blue text-[10px] font-bold whitespace-nowrap"
-                                    >
-                                      {getEvent(key).name}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </td>
-                            <td className="py-2 px-3 text-right space-x-2 align-top whitespace-nowrap">
-                              <button
-                                onClick={() => setEditingAthlete(a)}
-                                className="text-blue hover:text-blue-light opacity-60 group-hover:opacity-100 font-bold px-1 transition"
-                                title="Редактировать спортсмена"
-                              >
-                                ✎
-                              </button>
-                              <button
-                                onClick={() => handleDelete(a.id, a.fullName)}
-                                className="text-status-fail hover:text-status-fail/80 opacity-60 group-hover:opacity-100 font-bold px-1 transition"
-                                title="Удалить спортсмена"
-                              >
-                                ✕
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </motion.div>
-          );
-        })}
+      <div className="max-h-[52rem] overflow-y-auto space-y-3 pr-1">
+        {teamGroups.length === 0 ? (
+          <p className="text-xs text-muted italic py-4 text-center">Ничего не найдено.</p>
+        ) : (
+          teamGroups.map(({ teamId, name, athletes: teamAthletes }, idx) => {
+            const collapsed = collapsedTeams.has(teamId);
+            return (
+              <motion.div
+                key={teamId}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.3) }}
+                className="border border-white/10 rounded-lg surface-inset overflow-hidden"
+              >
+                <button
+                  onClick={() => toggleTeam(teamId)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-white/[0.04] transition"
+                >
+                  <span className="font-bold text-sm">{name}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold num bg-white/10 text-muted px-2 py-0.5 rounded-full">
+                      {teamAthletes.length}
+                    </span>
+                    <motion.span
+                      animate={{ rotate: collapsed ? 0 : 180 }}
+                      transition={{ duration: 0.2 }}
+                      className="text-xs text-muted"
+                    >
+                      ▼
+                    </motion.span>
+                  </span>
+                </button>
+
+                {!collapsed && (
+                  <div className="overflow-x-auto border-t border-white/10">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[var(--surface)] border-b border-white/10 text-muted uppercase font-bold text-[10px] tracking-wide">
+                        <tr>
+                          <th className="py-2 px-3 w-14">№</th>
+                          <th className="py-2 px-3">ФИО</th>
+                          <th className="py-2 px-3">Категория</th>
+                          <th className="py-2 px-3">Дисциплины</th>
+                          <th className="py-2 px-3 text-right">Действие</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {teamAthletes.map((a) => {
+                          const eventKeys = eventsByAthlete.get(a.id) ?? [];
+                          return (
+                            <tr key={a.id} className="group hover:bg-white/[0.04] transition-colors">
+                              <td className="py-2 px-3 align-top">
+                                <BibCell athlete={a} meetId={meetId} />
+                              </td>
+                              <td className="py-2 px-3 font-medium align-top">{a.fullName}</td>
+                              <td className="py-2 px-3 align-top">
+                                {a.ageGroup} ({a.gender === "м" ? "Ю" : "Д"})
+                              </td>
+                              <td className="py-2 px-3 align-top">
+                                {eventKeys.length === 0 ? (
+                                  <span className="text-muted italic">нет результатов</span>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1">
+                                    {eventKeys.map((key) => (
+                                      <span
+                                        key={key}
+                                        className="px-1.5 py-0.5 rounded bg-blue/10 text-blue text-[10px] font-bold whitespace-nowrap"
+                                      >
+                                        {getEvent(key).name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 text-right space-x-2 align-top whitespace-nowrap">
+                                <button
+                                  onClick={() => setEditingAthlete(a)}
+                                  className="text-blue hover:text-blue-light opacity-60 group-hover:opacity-100 font-bold px-1 transition"
+                                  title="Редактировать спортсмена"
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(a.id, a.fullName)}
+                                  className="text-status-fail hover:text-status-fail/80 opacity-60 group-hover:opacity-100 font-bold px-1 transition"
+                                  title="Удалить спортсмена"
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </motion.div>
+            );
+          })
+        )}
       </div>
 
       <AthleteModal
