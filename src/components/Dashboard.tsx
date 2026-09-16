@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { useAppStore } from "@/store/useAppStore";
-import { exportCsv } from "@/lib/exportCsv";
+import { exportPdf } from "@/lib/exportPdf";
 import StandingsTabs from "./StandingsTabs";
 import AthletesList from "./AthletesList";
 import AthleteCoverage from "./AthleteCoverage";
@@ -72,9 +72,9 @@ export default function Dashboard({ meetId }: { meetId: string }) {
           <Button variant="secondary" onClick={() => setSettingsOpen(true)}>
             ⚙ Настройки
           </Button>
-          <Button variant="secondary" onClick={() => exportCsv(meetId)}>
-            <IconDownload className="w-4 h-4" /> Экспорт в CSV
-          </Button>
+          <Button variant="secondary" onClick={() => exportPdf(meetId)}>
+    <IconDownload className="w-4 h-4" /> Экспорт в PDF
+       </Button>
           <Button variant="secondary" onClick={() => setBulkImportOpen(true)}>
             <IconUsers className="w-4 h-4" /> Добавить команду списком
           </Button>
