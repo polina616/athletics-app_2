@@ -1,5 +1,5 @@
 import Dexie, { Table } from "dexie";
-import { Athlete, Entry, Meet, Team } from "./types";
+import { Athlete, Entry, Meet, RelayTeam, Team } from "./types";
 
 /**
  * Local-first storage.
@@ -18,6 +18,7 @@ export class AthleticsDB extends Dexie {
   athletes!: Table<Athlete, string>;
   entries!: Table<Entry, string>;
   meta!: Table<{ key: string; value: string }, string>;
+  relayTeams!: Table<RelayTeam, string>;
 
   constructor() {
     super("athletics-meet-db");
@@ -44,6 +45,15 @@ export class AthleticsDB extends Dexie {
       teams: "id, meetId, updatedAt, dirty",
       athletes: "id, meetId, teamId, ageGroup, gender, updatedAt, dirty",
       entries: "id, meetId, eventKey, ageGroup, gender, teamId, athleteId, status, updatedAt, dirty",
+      meta: "key",
+    });
+    
+    this.version(4).stores({
+      meets: "id, ownerId, updatedAt, dirty",
+      teams: "id, meetId, updatedAt, dirty",
+      athletes: "id, meetId, teamId, ageGroup, gender, updatedAt, dirty",
+      entries: "id, meetId, eventKey, ageGroup, gender, teamId, athleteId, status, updatedAt, dirty",
+      relayTeams: "id, meetId, teamId, ageGroup, gender, updatedAt, dirty",
       meta: "key",
     });
   }
