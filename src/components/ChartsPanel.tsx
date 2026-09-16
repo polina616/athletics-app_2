@@ -18,17 +18,20 @@ const tooltipStyle = {
 };
 
 export default function ChartsPanel({ meetId }: { meetId: string }) {
+  const relayTeams = useLiveQuery(() => db.relayTeams.where({ meetId }).filter((r) => !r.deleted).toArray(), [meetId]) ?? [];
   const teams =
     useLiveQuery(() => db.teams.where({ meetId }).filter((t) => !t.deleted).toArray(), [meetId]) ?? [];
   const entries =
     useLiveQuery(() => db.entries.where({ meetId }).filter((e) => !e.deleted).toArray(), [meetId]) ?? [];
-
-  const standings = computeTeamStandings(entries, teams);
-  const coverage = eventCoverage(entries);
+  
+  const standings = computeTeamStandings(entries, teams, relayTeams);
+const coverage = eventCoverage(entries);
+if (relayTeams.length) coverage["relay"] = relayTeams.length;
   const coverageData = EVENTS.filter((e) => coverage[e.key]).map((e) => ({
     name: e.name,
     count: coverage[e.key] ?? 0,
   }));
+  
 
   return (
     <div className="grid gap-4">
