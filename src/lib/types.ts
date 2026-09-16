@@ -124,3 +124,21 @@ export interface Meet {
   updatedAt: string;
   dirty?: boolean;
 }
+export interface RelayTeam {
+  id: string;
+  meetId: string;
+  teamId: string;
+  ageGroup: AgeGroup;
+  gender: Gender;
+  /** По одному id спортсмена на этап, в порядке бега. "" — этап не укомплектован. */
+  legAthleteIds: string[];
+  status: ResultStatus | null;
+  resultRaw: string;
+  resultSeconds: number | null;
+  manualPoints: number | null;
+  autoPoints: number;
+  createdAt: string;
+  updatedAt: string;
+  deleted: boolean;
+  dirty?: boolean;
+}
