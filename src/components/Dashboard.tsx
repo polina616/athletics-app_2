@@ -26,6 +26,7 @@ export default function Dashboard({ meetId }: { meetId: string }) {
     () => db.teams.where({ meetId }).filter((t) => !t.deleted).toArray(),
     [meetId]
   );
+  const relayTeams = useLiveQuery(() => db.relayTeams.where({ meetId }).filter((r) => !r.deleted).toArray(), [meetId]);
   const entries = useLiveQuery(
     () => db.entries.where({ meetId }).filter((e) => !e.deleted).toArray(),
     [meetId]
@@ -88,7 +89,7 @@ export default function Dashboard({ meetId }: { meetId: string }) {
         <StatCard label="Участников" value={athletes?.length ?? 0} icon={<IconUsers className="w-5 h-5" />} accent="track" index={0} />
         <StatCard label="Команд" value={teams?.length ?? 0} icon={<IconFlag className="w-5 h-5" />} accent="blue" index={1} />
         <StatCard label="Дисциплин" value={meet.eventEligibility.length} icon={<IconFlag className="w-5 h-5" />} accent="gold" index={2} />
-        <StatCard label="Внесено результатов" value={entries?.length ?? 0} icon={<IconUsers className="w-5 h-5" />} accent="track" index={3} />
+        <StatCard label="Внесено результатов" value={(entries?.length ?? 0) + (relayTeams?.length ?? 0)} icon={<IconUsers className="w-5 h-5" />} accent="track" index={3} />
       </div>
 
       {/* Растянута на всю ширину страницы, а не зажата в боковую колонку */}
