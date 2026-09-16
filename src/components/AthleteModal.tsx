@@ -54,34 +54,38 @@ export default function AthleteModal({ meetId, isOpen, onClose, editingAthlete }
   const initializedRef = useRef(false);
 
   useEffect(() => {
-    if (!isOpen) {
-      initializedRef.current = false;
-      return;
-    }
-    if (initializedRef.current) return;
-    initializedRef.current = true;
+  if (!isOpen) {
+    initializedRef.current = false;
+    return;
+  }
+  if (initializedRef.current) return;
 
-    if (editingAthlete) {
-      setBib(editingAthlete.bib ?? "");
-      setFullName(editingAthlete.fullName);
-      setTeamId(editingAthlete.teamId);
-      setGender(editingAthlete.gender);
-      setAgeGroup(editingAthlete.ageGroup);
-    } else {
-      setBib("");
-      setFullName("");
+  // Для нового спортсмена дефолты команды/возраста берутся из meet/teams —
+  // если они ещё не подтянулись из Dexie, ждём следующего рендера вместо
+  // того, чтобы навсегда зафиксировать teamId/ageGroup пустыми.
+  if (!editingAthlete && (!meet || !teams)) return;
 
-      // Берём запомненное значение, только если оно всё ещё существует в
-      // текущем составе команд/возрастных групп (их могли удалить/менять).
-      const rememberedTeamValid = lastDefaults && teams?.some((t) => t.id === lastDefaults.teamId);
-      const rememberedAgeGroupValid = lastDefaults && meet?.ageGroups?.includes(lastDefaults.ageGroup);
+  initializedRef.current = true;
 
-      setTeamId(rememberedTeamValid ? lastDefaults!.teamId : teams?.[0]?.id ?? "");
-      setAgeGroup(rememberedAgeGroupValid ? lastDefaults!.ageGroup : meet?.ageGroups?.[0] ?? "");
-      setGender(lastDefaults?.gender ?? "м");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingAthlete, isOpen]);
+  if (editingAthlete) {
+    setBib(editingAthlete.bib ?? "");
+    setFullName(editingAthlete.fullName);
+    setTeamId(editingAthlete.teamId);
+    setGender(editingAthlete.gender);
+    setAgeGroup(editingAthlete.ageGroup);
+  } else {
+    setBib("");
+    setFullName("");
+
+    const rememberedTeamValid = lastDefaults && teams?.some((t) => t.id === lastDefaults.teamId);
+    const rememberedAgeGroupValid = lastDefaults && meet?.ageGroups?.includes(lastDefaults.ageGroup);
+
+    setTeamId(rememberedTeamValid ? lastDefaults!.teamId : teams?.[0]?.id ?? "");
+    setAgeGroup(rememberedAgeGroupValid ? lastDefaults!.ageGroup : meet?.ageGroups?.[0] ?? "");
+    setGender(lastDefaults?.gender ?? "м");
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [editingAthlete, isOpen, meet, teams]);
 
   if (!isOpen) return null;
 
