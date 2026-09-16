@@ -24,9 +24,10 @@ export default function ChartsPanel({ meetId }: { meetId: string }) {
   const entries =
     useLiveQuery(() => db.entries.where({ meetId }).filter((e) => !e.deleted).toArray(), [meetId]) ?? [];
   
-  const standings = computeTeamStandings(entries, teams, relayTeams);
+const standings = computeTeamStandings(entries, teams, relayTeams);
 const coverage = eventCoverage(entries);
-if (relayTeams.length) coverage["relay"] = relayTeams.length;
+const relayWithResult = relayTeams.filter((r) => r.status || r.resultSeconds !== null).length;
+if (relayWithResult) coverage["relay"] = relayWithResult;
   const coverageData = EVENTS.filter((e) => coverage[e.key]).map((e) => ({
     name: e.name,
     count: coverage[e.key] ?? 0,
