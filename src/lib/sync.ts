@@ -1,7 +1,7 @@
 import type { Table } from "dexie";
 import { supabase } from "./supabaseClient";
 import { db, getLastSyncedAt, setLastSyncedAt } from "./db";
-import { Athlete, Entry, Meet, Team } from "./types";
+import { Athlete, Entry, Meet, RelayTeam, Team } from "./types";
 
 /**
  * SYNC STRATEGY — без изменений по сути (см. README): пишем сначала в
@@ -134,6 +134,42 @@ function rowToMeet(r: any): Meet {
     dirty: false,
   };
 }
+function relayTeamToRow(r: RelayTeam) {
+  return {
+    id: r.id,
+    meet_id: r.meetId,
+    team_id: r.teamId,
+    age_group: r.ageGroup,
+    gender: r.gender,
+    leg_athlete_ids: r.legAthleteIds,
+    status: r.status,
+    result_raw: r.resultRaw,
+    result_seconds: r.resultSeconds,
+    manual_points: r.manualPoints,
+    auto_points: r.autoPoints,
+    deleted: r.deleted,
+    created_at: r.createdAt,
+  };
+}
+function rowToRelayTeam(row: any): RelayTeam {
+  return {
+    id: row.id,
+    meetId: row.meet_id,
+    teamId: row.team_id,
+    ageGroup: row.age_group,
+    gender: row.gender,
+    legAthleteIds: row.leg_athlete_ids ?? [],
+    status: row.status ?? null,
+    resultRaw: row.result_raw,
+    resultSeconds: row.result_seconds,
+    manualPoints: row.manual_points,
+    autoPoints: row.auto_points,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deleted: row.deleted,
+    dirty: false,
+  };
+}
 
 // ---------- push ----------
 
@@ -142,6 +178,7 @@ export async function pushDirty(meetId: string): Promise<{ ok: boolean; error?: 
     const dirtyTeams = await db.teams.where({ meetId }).filter((t) => !!t.dirty).toArray();
     const dirtyAthletes = await db.athletes.where({ meetId }).filter((a) => !!a.dirty).toArray();
     const dirtyEntries = await db.entries.where({ meetId }).filter((e) => !!e.dirty).toArray();
+    const dirtyRelayTeams = await db.relayTeams.where({ meetId }).filter((r) => !!r.dirty).toArray();
     const meet = await db.meets.get(meetId);
 
     if (meet?.dirty) {
@@ -173,6 +210,14 @@ export async function pushDirty(meetId: string): Promise<{ ok: boolean; error?: 
         for (const e of dirtyEntries) await db.entries.update(e.id, { dirty: false });
       });
     }
+    
+    if (dirtyRelayTeams.length) {
+  const { error } = await supabase.from("relay_teams").upsert(dirtyRelayTeams.map(relayTeamToRow));
+  if (error) throw error;
+  await db.transaction("rw", db.relayTeams, async () => {
+    for (const r of dirtyRelayTeams) await db.relayTeams.update(r.id, { dirty: false });
+  });
+}
 
     return { ok: true };
   } catch (err: any) {
@@ -181,6 +226,7 @@ export async function pushDirty(meetId: string): Promise<{ ok: boolean; error?: 
   }
 }
 
+
 // ---------- pull ----------
 
 export async function pullRemote(meetId: string): Promise<{ ok: boolean; error?: string }> {
@@ -188,28 +234,28 @@ export async function pullRemote(meetId: string): Promise<{ ok: boolean; error?:
     const since = await getLastSyncedAt(meetId);
     const sinceIso = since ?? "1970-01-01T00:00:00Z";
 
-    const [
-      { data: meetRows, error: meetErr },
-      { data: teamRows, error: teamErr },
-      { data: athleteRows, error: athleteErr },
-      { data: entryRows, error: entryErr },
-    ] = await Promise.all([
-      supabase.from("meets").select("*").eq("id", meetId).gt("updated_at", sinceIso),
-      supabase.from("teams").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
-      supabase.from("athletes").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
-      supabase.from("entries").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
-    ]);
-    if (meetErr) throw meetErr;
-    if (teamErr) throw teamErr;
-    if (athleteErr) throw athleteErr;
-    if (entryErr) throw entryErr;
+   const [
+  { data: meetRows, error: meetErr },
+  { data: teamRows, error: teamErr },
+  { data: athleteRows, error: athleteErr },
+  { data: entryRows, error: entryErr },
+  { data: relayTeamRows, error: relayTeamErr },
+] = await Promise.all([
+  supabase.from("meets").select("*").eq("id", meetId).gt("updated_at", sinceIso),
+  supabase.from("teams").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
+  supabase.from("athletes").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
+  supabase.from("entries").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
+  supabase.from("relay_teams").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
+]);
+if (relayTeamErr) throw relayTeamErr;
 
-    await db.transaction("rw", db.meets, db.teams, db.athletes, db.entries, async () => {
-      for (const r of meetRows ?? []) await mergeRemote(db.meets, rowToMeet(r));
-      for (const r of teamRows ?? []) await mergeRemote(db.teams, rowToTeam(r));
-      for (const r of athleteRows ?? []) await mergeRemote(db.athletes, rowToAthlete(r));
-      for (const r of entryRows ?? []) await mergeRemote(db.entries, rowToEntry(r));
-    });
+await db.transaction("rw", db.meets, db.teams, db.athletes, db.entries, db.relayTeams, async () => {
+  for (const r of meetRows ?? []) await mergeRemote(db.meets, rowToMeet(r));
+  for (const r of teamRows ?? []) await mergeRemote(db.teams, rowToTeam(r));
+  for (const r of athleteRows ?? []) await mergeRemote(db.athletes, rowToAthlete(r));
+  for (const r of entryRows ?? []) await mergeRemote(db.entries, rowToEntry(r));
+  for (const r of relayTeamRows ?? []) await mergeRemote(db.relayTeams, rowToRelayTeam(r));
+});
 
     await setLastSyncedAt(meetId, new Date().toISOString());
     return { ok: true };
