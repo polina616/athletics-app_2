@@ -23,16 +23,17 @@ export default function TeamStandingsByEvent({ meetId }: { meetId: string }) {
   const teams = useLiveQuery(
     () => db.teams.where({ meetId }).filter((t) => !t.deleted).toArray(),
     [meetId]
-  );
+  ); 
+  const relayTeams = useLiveQuery(() => db.relayTeams.where({ meetId }).filter((r) => !r.deleted).toArray(), [meetId]);
+
   const entries = useLiveQuery(
     () => db.entries.where({ meetId }).filter((e) => !e.deleted).toArray(),
     [meetId]
   );
 
-  if (!teams || !entries) return <div className="skeleton h-48 rounded-xl2" />;
-
-  const byEvent = teamStandingsByEvent(entries, teams);
-
+ if (!teams || !entries || !relayTeams) return <div className="skeleton h-48 rounded-xl2" />;
+const byEvent = teamStandingsByEvent(entries, teams, relayTeams);
+ 
   return (
     <div className="card-flat p-5 rounded-xl space-y-4">
       <div className="border-b border-white/10 pb-3">
