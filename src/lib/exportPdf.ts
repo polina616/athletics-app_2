@@ -329,9 +329,21 @@ export async function exportPdf(meetId: string): Promise<void> {
   `;
   const overviewHtml = buildOverviewHtml(meet, teams, entries);
   const relayHtml = relayTeams.length ? buildRelayHtml(meet, relayTeams, teams, athletes) : "";
-  const boysStandingsHtml = buildGenderStandingsHtml(entries, relayTeams, teams, "м");
+    const boysStandingsHtml = buildGenderStandingsHtml(entries, relayTeams, teams, "м");
   const girlsStandingsHtml = buildGenderStandingsHtml(entries, relayTeams, teams, "ж");
   const disciplineBlocks = buildDisciplineBlocks(meet, entries, teams);
+
+  // Подписи — тем же способом рендера, что и таблицы (HTML → canvas →
+  // картинка): встроенные шрифты jsPDF (helvetica и т.п.) не умеют в
+  // кириллицу и превращают текст в набор символов, поэтому pdf.text()
+  // здесь не годится — используем тот же браузерный рендер, что и для
+  // остального контента.
+  const signHtml = `
+    <div style="display:flex; justify-content:space-between; gap:40px; margin-top:6px; font-size:10px; font-weight:700; white-space:nowrap;">
+      <div>Главный судья соревнований _____________________</div>
+      <div>Главный секретарь соревнований _____________________</div>
+    </div>
+  `;
 
   const blocksHtml = [
     titleHtml + overviewHtml,
@@ -339,6 +351,7 @@ export async function exportPdf(meetId: string): Promise<void> {
     boysStandingsHtml,
     girlsStandingsHtml,
     ...disciplineBlocks,
+    signHtml,
   ].filter(Boolean);
 
   const pdf = new jsPDF({ unit: "pt", format: "a4" });
@@ -354,7 +367,6 @@ export async function exportPdf(meetId: string): Promise<void> {
   for (const html of blocksHtml) {
     const { canvas, widthPx } = await renderToCanvas(html);
 
-    // Естественный размер блока в pt, но не шире полезной ширины страницы.
     const naturalWidthPt = widthPx * PX_TO_PT;
     const imgWidthPt = Math.min(naturalWidthPt, usableWidth);
     const imgHeightPt = imgWidthPt * (canvas.height / canvas.width);
@@ -369,8 +381,6 @@ export async function exportPdf(meetId: string): Promise<void> {
       cursorY += imgHeightPt + 12;
       pageHasContent = true;
     } else {
-      // Блок выше страницы целиком (очень длинная таблица) — режем по
-      // высоте на несколько страниц при выбранной ширине imgWidthPt.
       const pxPerPageHeight = (maxHeight * canvas.width) / imgWidthPt;
       let sy = 0;
       while (sy < canvas.height) {
@@ -392,24 +402,6 @@ export async function exportPdf(meetId: string): Promise<void> {
       cursorY = margin;
     }
   }
-
-  // Подписи — настоящим векторным текстом PDF, а не картинкой: это
-  // полностью исключает обрезание по краю, которое было при рендере
-  // через html2canvas с фиксированной шириной контейнера.
-  const signY = pageHeight - margin - 10;
-  if (cursorY > signY - 20) {
-    pdf.addPage();
-  }
-  const finalSignY = pdf.internal.pages.length > 1 && cursorY > signY - 20 ? pageHeight - margin - 10 : Math.max(cursorY + 20, signY);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(10);
-  pdf.text("Главный судья соревнований _____________________", margin, finalSignY);
-  pdf.text(
-    "Главный секретарь соревнований _____________________",
-    pageWidth - margin,
-    finalSignY,
-    { align: "right" }
-  );
 
   pdf.save(`${meet.name ?? "meet"}.pdf`);
 }
