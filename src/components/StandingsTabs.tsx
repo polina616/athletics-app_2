@@ -5,7 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { EVENTS } from "@/lib/scoring";
-import { personalAllAround } from "@/lib/derive";
+import { athleteEventBreakdown, personalAllAround } from "@/lib/derive";
+import { STATUS_LABELS } from "@/lib/types";
 import ProtocolTable from "./ProtocolTable";
 import StandingsTable from "./StandingsTable";
 import TeamStandingsByEvent from "./TeamStandingsByEvent";
@@ -17,9 +18,19 @@ import RelayProtocolTable from "./RelayProtocolTable";
 
 type Tab = "protocols" | "individual" | "teams" | "charts";
 
+const medalClass = (place: number) =>
+  place === 1
+    ? "bg-gold text-black"
+    : place === 2
+    ? "bg-white/25 text-black"
+    : place === 3
+    ? "bg-track-dark text-white"
+    : "bg-white/10 text-[var(--ink)]";
+
 export default function StandingsTabs({ meetId }: { meetId: string }) {
   const [activeTab, setActiveTab] = useState<Tab>("protocols");
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
+  const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null);
 
   const meet = useLiveQuery(() => db.meets.get(meetId), [meetId]);
   const entries = useLiveQuery(
@@ -130,6 +141,9 @@ export default function StandingsTabs({ meetId }: { meetId: string }) {
                 <IconMedal className="w-5 h-5 text-gold" />
                 Личный зачёт (сумма очков по всем дисциплинам)
               </h3>
+              <p className="text-xs text-muted -mt-4">
+                Нажмите на спортсмена, чтобы увидеть, из каких результатов сложилась его сумма.
+              </p>
 
               {allAroundByCategory.size === 0 ? (
                 <EmptyState title="Результатов пока нет" description="Внесите первый результат, чтобы увидеть многоборный зачёт." />
@@ -159,32 +173,112 @@ export default function StandingsTabs({ meetId }: { meetId: string }) {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                          {rows.map((r) => (
-                            <tr key={r.athleteId} className="hover:bg-white/[0.04] transition-colors">
-                              <td className="py-2 font-bold num text-muted">
-                                {r.place <= 3 ? (
-                                  <span
-                                    className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${
-                                      r.place === 1
-                                        ? "bg-gold text-black"
-                                        : r.place === 2
-                                        ? "bg-white/25 text-black"
-                                        : "bg-track-dark text-white"
-                                    }`}
-                                  >
-                                    {r.place}
-                                  </span>
-                                ) : (
-                                  r.place
-                                )}
-                              </td>
-                              <td className="py-2 num text-muted">{r.bib ?? "—"}</td>
-                              <td className="py-2 font-medium">{r.athleteName}</td>
-                              <td className="py-2 text-muted">{r.teamName}</td>
-                              <td className="py-2 num text-muted">{Object.keys(r.perEvent).length}</td>
-                              <td className="py-2 text-right num font-bold text-track text-sm">{r.total}</td>
-                            </tr>
-                          ))}
+                          {rows.map((r) => {
+                            const isExpanded = expandedAthleteId === r.athleteId;
+                            const breakdown = isExpanded ? athleteEventBreakdown(entries, r.athleteId) : [];
+                            return (
+                              <>
+                                <tr
+                                  key={r.athleteId}
+                                  onClick={() => setExpandedAthleteId(isExpanded ? null : r.athleteId)}
+                                  className="hover:bg-white/[0.04] transition-colors cursor-pointer"
+                                >
+                                  <td className="py-2 font-bold num text-muted">
+                                    {r.place <= 3 ? (
+                                      <span
+                                        className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${
+                                          r.place === 1
+                                            ? "bg-gold text-black"
+                                            : r.place === 2
+                                            ? "bg-white/25 text-black"
+                                            : "bg-track-dark text-white"
+                                        }`}
+                                      >
+                                        {r.place}
+                                      </span>
+                                    ) : (
+                                      r.place
+                                    )}
+                                  </td>
+                                  <td className="py-2 num text-muted">{r.bib ?? "—"}</td>
+                                  <td className="py-2 font-medium">{r.athleteName}</td>
+                                  <td className="py-2 text-muted">{r.teamName}</td>
+                                  <td className="py-2 num text-muted">{Object.keys(r.perEvent).length}</td>
+                                  <td className="py-2 text-right num font-bold text-track text-sm flex items-center justify-end gap-1.5">
+                                    {r.total}
+                                    <motion.span
+                                      animate={{ rotate: isExpanded ? 180 : 0 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="text-[10px] text-muted"
+                                    >
+                                      ▼
+                                    </motion.span>
+                                  </td>
+                                </tr>
+                                <tr key={`${r.athleteId}-detail`}>
+                                  <td colSpan={6} className="p-0 border-0">
+                                    <AnimatePresence initial={false}>
+                                      {isExpanded && (
+                                        <motion.div
+                                          initial={{ height: 0, opacity: 0 }}
+                                          animate={{ height: "auto", opacity: 1 }}
+                                          exit={{ height: 0, opacity: 0 }}
+                                          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                                          className="overflow-hidden"
+                                        >
+                                          <div className="bg-[var(--surface)] border-y border-white/10 p-3">
+                                            {breakdown.length === 0 ? (
+                                              <p className="text-[11px] text-muted italic">Нет результатов.</p>
+                                            ) : (
+                                              <table className="w-full text-left">
+                                                <thead className="text-muted font-bold border-b border-white/5 text-[10px] uppercase tracking-wide">
+                                                  <tr>
+                                                    <th className="py-1 w-10">Место</th>
+                                                    <th className="py-1">Дисциплина</th>
+                                                    <th className="py-1">Рез-т</th>
+                                                    <th className="py-1 text-right">Очки</th>
+                                                  </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5">
+                                                  {breakdown.map((b) => {
+                                                    const resText = b.status ? STATUS_LABELS[b.status] : b.resultRaw || "—";
+                                                    return (
+                                                      <tr key={b.eventKey}>
+                                                        <td className="py-1.5 num">
+                                                          {b.place ? (
+                                                            <span
+                                                              className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${medalClass(
+                                                                b.place
+                                                              )}`}
+                                                            >
+                                                              {b.place}
+                                                            </span>
+                                                          ) : (
+                                                            <span className="text-muted">—</span>
+                                                          )}
+                                                        </td>
+                                                        <td className="py-1.5 font-medium">{b.eventName}</td>
+                                                        <td className={`py-1.5 num ${b.status ? "text-status-fail" : ""}`}>
+                                                          {resText}
+                                                        </td>
+                                                        <td className="py-1.5 text-right font-bold num text-track">
+                                                          +{b.pts}
+                                                        </td>
+                                                      </tr>
+                                                    );
+                                                  })}
+                                                </tbody>
+                                              </table>
+                                            )}
+                                          </div>
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
+                                  </td>
+                                </tr>
+                              </>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </motion.div>
