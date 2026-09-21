@@ -68,7 +68,7 @@ const breakdowns = teamBreakdowns(filteredEntries, teams, filteredRelayTeams, at
 // Режим "три лучших" — сумма личных многоборных сумм трёх лучших
 // спортсменов команды (без эстафеты — она не привязана к одному
 // спортсмену), с раскрытием по этим трём спортсменам.
-const top3Standings = computeTeamStandingsTop3(filteredEntries, teams, athletes);
+const top3Standings = computeTeamStandingsTop3(filteredEntries, teams, athletes, filteredRelayTeams);
 
   const filterOptions: { key: TeamGenderFilter; label: string }[] = [
     { key: "all", label: "Общий" },
@@ -311,7 +311,7 @@ const top3Standings = computeTeamStandingsTop3(filteredEntries, teams, athletes)
                       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                       className="overflow-hidden"
                     >
-                      <div className="p-3 bg-[var(--surface)] border-t border-white/10 text-xs">
+                                            <div className="p-3 bg-[var(--surface)] border-t border-white/10 text-xs space-y-2">
                         {team.top3.length === 0 ? (
                           <p className="text-muted italic">
                             Нет спортсменов с результатами по индивидуальным дисциплинам.
@@ -349,6 +349,15 @@ const top3Standings = computeTeamStandingsTop3(filteredEntries, teams, athletes)
                               ))}
                             </tbody>
                           </table>
+                        )}
+
+                        {team.relayPts > 0 && (
+                          <div className="flex items-center justify-between border-t border-white/5 pt-2">
+                            <span className="text-blue font-bold uppercase text-[10px] tracking-wide">
+                              + Эстафета
+                            </span>
+                            <span className="font-bold num text-track">+{team.relayPts}</span>
+                          </div>
                         )}
                       </div>
                     </motion.div>
