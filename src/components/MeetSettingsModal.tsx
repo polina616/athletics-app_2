@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { setEventCustomParams, setEventEligibilityByGender, updateMeet } from "@/lib/actions";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/lib/db";
+import { addTeam, setEventCustomParams, setEventEligibilityByGender, updateMeet } from "@/lib/actions";
 import { EVENT_GROUPS } from "@/lib/scoring";
 import { EventCustomParams, Gender, Meet } from "@/lib/types";
 import Modal from "./ui/Modal";
 import Button from "./ui/Button";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/lib/db";
-import { addTeam, setEventCustomParams, setEventEligibilityByGender, updateMeet } from "@/lib/actions";
 
 interface Props {
   meet: Meet;
@@ -50,25 +49,7 @@ export default function MeetSettingsModal({ meet, isOpen, onClose }: Props) {
   const [date, setDate] = useState(meet.date ?? "");
   const [place, setPlace] = useState(meet.place ?? "");
   const [ageGroupsText, setAgeGroupsText] = useState(meet.ageGroups.join("\n"));
-const [newTeamName, setNewTeamName] = useState("");
-const [addingTeam, setAddingTeam] = useState(false);
-  const teams = useLiveQuery(
-  () => db.teams.where({ meetId: meet.id }).filter((t) => !t.deleted).toArray(),
-  [meet.id]
-);
 
-async function handleAddTeam(e: React.FormEvent) {
-  e.preventDefault();
-  const name = newTeamName.trim();
-  if (!name) return;
-  setAddingTeam(true);
-  try {
-    await addTeam(meet.id, name);
-    setNewTeamName("");
-  } finally {
-    setAddingTeam(false);
-  }
-}
   const [distanceDrafts, setDistanceDrafts] = useState<Record<string, string>>(
     Object.fromEntries(
       SIMPLE_DISTANCE_EVENTS.map((ev) => [ev.key, meet.eventParams?.[ev.key]?.distanceMeters?.toString() ?? ""])
@@ -76,6 +57,27 @@ async function handleAddTeam(e: React.FormEvent) {
   );
 
   const [relayDraft, setRelayDraft] = useState<RelayDraft>(() => relayDraftFromParams(meet.eventParams?.relay));
+
+  // ---------- команды ----------
+  const teams = useLiveQuery(
+    () => db.teams.where({ meetId: meet.id }).filter((t) => !t.deleted).toArray(),
+    [meet.id]
+  );
+  const [newTeamName, setNewTeamName] = useState("");
+  const [addingTeam, setAddingTeam] = useState(false);
+
+  async function handleAddTeam(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = newTeamName.trim();
+    if (!trimmed) return;
+    setAddingTeam(true);
+    try {
+      await addTeam(meet.id, trimmed);
+      setNewTeamName("");
+    } finally {
+      setAddingTeam(false);
+    }
+  }
 
   if (!isOpen) return null;
 
@@ -219,51 +221,53 @@ async function handleAddTeam(e: React.FormEvent) {
           Сохранить основные данные
         </Button>
       </form>
-    <div className="border-t border-white/10 pt-4 space-y-3">
-  <div className="field-label !mb-1">Команды</div>
-  <p className="text-[11px] text-muted -mt-1">
-    Уже заявленные команды нельзя удалить отсюда (чтобы не потерять их результаты) — можно только
-    добавить новую.
-  </p>
 
-  {teams === undefined ? (
-    <div className="skeleton h-8 rounded-xl2" />
-  ) : teams.length === 0 ? (
-    <p className="text-xs text-gold">Команд пока нет.</p>
-  ) : (
-    <div className="flex flex-wrap gap-1.5">
-      {teams
-        .slice()
-        .sort((a, b) => a.name.localeCompare(b.name, "ru"))
-        .map((t) => (
-          <span
-            key={t.id}
-            className="px-2 py-1 rounded border border-white/10 text-[11px] text-[var(--ink)]/80"
+      <div className="border-t border-white/10 pt-4 space-y-3">
+        <div className="field-label !mb-1">Команды</div>
+        <p className="text-[11px] text-muted -mt-1">
+          Уже заявленные команды нельзя удалить отсюда (чтобы не потерять их результаты) — можно только
+          добавить новую.
+        </p>
+
+        {teams === undefined ? (
+          <div className="skeleton h-8 rounded-xl2" />
+        ) : teams.length === 0 ? (
+          <p className="text-xs text-gold">Команд пока нет.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {teams
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name, "ru"))
+              .map((t) => (
+                <span
+                  key={t.id}
+                  className="px-2 py-1 rounded border border-white/10 text-[11px] text-[var(--ink)]/80"
+                >
+                  {t.name}
+                </span>
+              ))}
+          </div>
+        )}
+
+        <form onSubmit={handleAddTeam} className="flex gap-2">
+          <input
+            type="text"
+            value={newTeamName}
+            onChange={(e) => setNewTeamName(e.target.value)}
+            placeholder="Название новой команды"
+            className="field !py-1.5 !text-xs flex-1"
+          />
+          <Button
+            variant="secondary"
+            type="submit"
+            disabled={addingTeam || !newTeamName.trim()}
+            className="!py-1.5 !px-3 !text-[11px] shrink-0"
           >
-            {t.name}
-          </span>
-        ))}
-    </div>
-  )}
+            {addingTeam ? "..." : "Добавить"}
+          </Button>
+        </form>
+      </div>
 
-  <form onSubmit={handleAddTeam} className="flex gap-2">
-    <input
-      type="text"
-      value={newTeamName}
-      onChange={(e) => setNewTeamName(e.target.value)}
-      placeholder="Название новой команды"
-      className="field !py-1.5 !text-xs flex-1"
-    />
-    <Button
-      variant="secondary"
-      type="submit"
-      disabled={addingTeam || !newTeamName.trim()}
-      className="!py-1.5 !px-3 !text-[11px] shrink-0"
-    >
-      {addingTeam ? "..." : "Добавить"}
-    </Button>
-  </form>
-</div>
       <div className="border-t border-white/10 pt-4 space-y-3">
         <div className="field-label !mb-1">Дисциплины</div>
         <p className="text-[11px] text-muted -mt-1">
