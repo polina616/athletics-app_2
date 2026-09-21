@@ -26,6 +26,7 @@ interface RowProps {
   meetId: string;
   eventKey: string;
   athlete: Athlete;
+  teamName: string;
   entry: Entry | null;
   place: number | null;
   editing: boolean;
@@ -38,7 +39,18 @@ interface RowProps {
   onSavedAdvance: () => void;
 }
 
-function ResultRow({ meetId, eventKey, athlete, entry, place, editing, onStartEdit, onStopEdit, onSavedAdvance }: RowProps) {
+function ResultRow({
+  meetId,
+  eventKey,
+  athlete,
+  teamName,
+  entry,
+  place,
+  editing,
+  onStartEdit,
+  onStopEdit,
+  onSavedAdvance,
+}: RowProps) {
   const eventConfig = getEvent(eventKey);
   // Значения полей больше НЕ читаются из entry при монтировании — строка
   // переиспользуется между вкладками дисциплин (см. ProtocolTable), и
@@ -99,6 +111,7 @@ function ResultRow({ meetId, eventKey, athlete, entry, place, editing, onStartEd
         <td className="py-1.5 font-bold num text-muted">{place ?? "—"}</td>
         <td className="py-1.5 num text-muted">{athlete.bib ?? "—"}</td>
         <td className="py-1.5 font-medium">{athlete.fullName}</td>
+        <td className="py-1.5 text-[var(--ink)]/70">{teamName}</td>
         <td className="py-1.5" colSpan={2}>
           <div className="flex items-center gap-1.5">
             <select
@@ -166,6 +179,7 @@ function ResultRow({ meetId, eventKey, athlete, entry, place, editing, onStartEd
       </td>
       <td className="py-1.5 num text-muted">{athlete.bib ?? "—"}</td>
       <td className="py-1.5 font-medium">{athlete.fullName}</td>
+      <td className="py-1.5 text-[var(--ink)]/70">{teamName}</td>
       <td
         onClick={onStartEdit}
         className={`py-1.5 num font-bold cursor-pointer ${
@@ -197,6 +211,27 @@ function ResultRow({ meetId, eventKey, athlete, entry, place, editing, onStartEd
     </motion.tr>
   );
 }
+
+/** Расставляет места по уже отсортированному списку спортсменов с учётом
+ *  равенства результата: одинаковый результат — одно и то же место
+ *  (1,1,3,4,4,6...), а не просто порядковый номер строки. */
+function computePlaces(
+  sortedAthletes: Athlete[],
+  entryByAthlete: Map<string, Entry>
+): number[] {
+  const places: number[] = [];
+  let lastValue: number | null = null;
+  let lastPlace = 0;
+  sortedAthletes.forEach((a, idx) => {
+    const value = entryByAthlete.get(a.id)!.resultSeconds as number;
+    const place = value === lastValue ? lastPlace : idx + 1;
+    lastValue = value;
+    lastPlace = place;
+    places.push(place);
+  });
+  return places;
+}
+
 export default function ProtocolTable({ meetId, eventKey }: { meetId: string; eventKey: string }) {
   const eventConfig = getEvent(eventKey);
   const meet = useLiveQuery(() => db.meets.get(meetId), [meetId]);
@@ -206,6 +241,10 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
   );
   const athletes = useLiveQuery(
     () => db.athletes.where({ meetId }).filter((a) => !a.deleted).toArray(),
+    [meetId]
+  );
+  const teams = useLiveQuery(
+    () => db.teams.where({ meetId }).filter((t) => !t.deleted).toArray(),
     [meetId]
   );
 
@@ -226,8 +265,10 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
 
   const handlePrint = () => window.print();
 
-  if (!meet || !entries || !athletes) return <div className="skeleton h-48 rounded-xl2" />;
+  if (!meet || !entries || !athletes || !teams) return <div className="skeleton h-48 rounded-xl2" />;
   const currentMeet = meet;
+
+  const teamName = (id: string) => teams.find((t) => t.id === id)?.name ?? "—";
 
   const eligibilityRows = meet.eventEligibility.filter((el) => el.eventKey === eventKey);
 
@@ -283,8 +324,14 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
       withStatus.sort((a, b) => a.fullName.localeCompare(b.fullName, "ru"));
       noResult.sort((a, b) => a.fullName.localeCompare(b.fullName, "ru"));
 
+      const withResultPlaces = computePlaces(withResult, entryByAthlete);
+
       const rows = [
-        ...withResult.map((a, idx) => ({ athlete: a, entry: entryByAthlete.get(a.id)!, place: idx + 1 })),
+        ...withResult.map((a, idx) => ({
+          athlete: a,
+          entry: entryByAthlete.get(a.id)!,
+          place: withResultPlaces[idx],
+        })),
         ...withStatus.map((a) => ({ athlete: a, entry: entryByAthlete.get(a.id)!, place: null as number | null })),
         ...noResult.map((a) => ({ athlete: a, entry: null as Entry | null, place: null as number | null })),
       ];
@@ -391,6 +438,7 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
                         <th className="py-1 w-8">Место</th>
                         <th className="py-1 w-12">№</th>
                         <th className="py-1">Спортсмен</th>
+                        <th className="py-1">Команда</th>
                         <th className="py-1">Рез-т</th>
                         <th className="py-1 text-right">Очки</th>
                         <th className="py-1 w-10 print:hidden"></th>
@@ -403,6 +451,7 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
                           meetId={meetId}
                           eventKey={eventKey}
                           athlete={athlete}
+                          teamName={teamName(athlete.teamId)}
                           entry={entry}
                           place={place}
                           editing={editingId === athlete.id}
