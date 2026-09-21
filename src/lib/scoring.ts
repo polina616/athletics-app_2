@@ -3,21 +3,32 @@ import { EventConfig, Gender } from "./types";
 /**
  * ОЦЕНОЧНАЯ (неофициальная) модель очков.
  *
- * Линейная шкала: результат на уровне anchors.base даёт BASE_POINTS,
- * результат на уровне anchors.elite даёт 1000 очков, всё что между —
- * прямая линия (без экспоненты, как было раньше). Результат хуже базового
- * тоже снижается линейно — от BASE_POINTS до MIN_POINTS на границе ещё
- * одного такого же "размаха" хуже базового.
+ * ЕДИНАЯ ПРЯМАЯ ЛИНИЯ на всём диапазоне результата, без излома в точке
+ * базового норматива — один и тот же наклон что для результатов лучше
+ * базы, что для результатов хуже неё. Раньше это были два разных
+ * линейных участка (разный наклон выше/ниже anchor.base), из-за чего в
+ * точке anchor.base получался перегиб.
  *
- * ВАЖНО: все дисциплины, включая стрельбу, теперь считаются по ОДНОЙ и
- * той же формуле с anchors (elite/base). Раньше стрельба была
- * исключением — очки = сырой результат серии (макс. 50/100), из-за чего
- * она давала в разы меньше очков, чем остальные дисциплины, отмасштабированные
- * к 1000 за элитный результат. Теперь и она приведена к общей шкале, так
- * что вклад любой дисциплины в сумму/зачёт сопоставим по порядку величины.
+ * Модель строится на двух опорных точках:
+ *  - "нулевая" точка (zero) → MIN_POINTS очков
+ *  - элитный норматив (anchors.elite) → ELITE_POINTS (1000) очков
+ * и одной прямой между ними (и за их пределами).
  *
- * Место в протоколе по-прежнему определяется по фактическому результату, а
- * не по этой оценке — см. protocolRows() в derive.ts.
+ * "Нулевая" точка вычисляется автоматически из anchors.base, отодвинутого
+ * ещё на ZERO_MULTIPLIER таких же "размахов" (base↔elite) в сторону
+ * ухудшения результата — так не нужно вручную перетаскивать anchors у
+ * каждой из ~20 дисциплин, чтобы прямая давала вменяемые очки и для
+ * слабых результатов. Чем больше ZERO_MULTIPLIER — тем более полого идёт
+ * линия и тем разумнее очки для слабых результатов.
+ *
+ * ВАЖНО: все дисциплины, включая стрельбу, считаются по ОДНОЙ и той же
+ * формуле с anchors (elite/base). Раньше стрельба была исключением —
+ * очки = сырой результат серии (макс. 50/100), из-за чего она давала в
+ * разы меньше очков, чем остальные дисциплины. Теперь и она приведена к
+ * общей шкале.
+ *
+ * Место в протоколе по-прежнему определяется по фактическому результату,
+ * а не по этой оценке — см. protocolRows() в derive.ts.
  *
  * Анкорные значения (elite/base) — расчётные ориентиры для школьного/
  * юношеского многоборья, не официальные нормативы. Отредактируйте их под
@@ -30,10 +41,17 @@ import { EventConfig, Gender } from "./types";
  * динамически в distanceAnchor() ниже.
  */
 export const MIN_POINTS = 1;
-const BASE_POINTS = 15;
 /** Очки за элитный результат (anchors.elite) — единая точка отсчёта для
- *  ВСЕХ дисциплин, это и есть то, что делает шкалу сопоставимой. */
+ *  ВСЕХ дисциплин. */
 const ELITE_POINTS = 1000;
+
+/** Насколько дальше anchor.base (в размахах base↔elite) отодвигается
+ *  "нулевая" точка прямой — точка, где очки = MIN_POINTS. Чем больше
+ *  значение, тем более пологая линия и тем разумнее очки для слабых
+ *  результатов (не проваливаются в минимум сразу за базовым нормативом).
+ *  Один параметр на все дисциплины — не нужно вручную перетаскивать
+ *  anchors у каждой из них. */
+const ZERO_MULTIPLIER = 3;
 
 export const EVENTS: EventConfig[] = [
   // ---------------- бег ----------------
@@ -152,10 +170,6 @@ export const EVENTS: EventConfig[] = [
   },
 
   // ---------------- стрельба ----------------
-  // Раньше очки = сырой результат серии (0..50 / 0..100), из-за чего
-  // стрельба давала в разы меньше очков, чем остальные дисциплины. Теперь
-  // считается по той же anchor-формуле, что и всё остальное — элитная
-  // серия даёт ~1000, базовая — BASE_POINTS, как и везде.
   {
     key: "airrifle5", name: "Пневматическая винтовка (5 выстрелов)", cat: "shooting",
     unitHint: "очки, напр. 42 (сумма за серию из 5 выстрелов, макс. 50)",
@@ -235,14 +249,13 @@ function distanceAnchor(
   return { elite: pace.elite * km, base: pace.base * km };
 }
 
-/** Очки для одного результата — ЛИНЕЙНАЯ шкала, одинаковая по форме для
- *  ВСЕХ дисциплин (включая стрельбу):
- *   - результат = базовый норматив  → BASE_POINTS
- *   - результат = элитный норматив  → ELITE_POINTS (1000)
- *   - между ними — прямая линия (никакой экспоненты)
- *   - лучше элитного — линейно продолжается выше 1000
- *   - хуже базового — линейно снижается до MIN_POINTS на границе ещё
- *     одного такого же "размаха" хуже базового, дальше — жёсткий пол */
+/** Очки для одного результата — ЕДИНАЯ ПРЯМАЯ ЛИНИЯ на всём диапазоне,
+ *  без излома, одинаковая по форме для ВСЕХ дисциплин (включая
+ *  стрельбу):
+ *   - "нулевая" точка (anchor.base, отодвинутый ещё на ZERO_MULTIPLIER
+ *     размахов в сторону ухудшения) → MIN_POINTS
+ *   - результат = элитный норматив (anchor.elite) → ELITE_POINTS (1000)
+ *   - между ними и за их пределами — одна и та же прямая, без переломов */
 export function computeAutoPoints(
   ev: EventConfig,
   gender: Gender,
@@ -254,27 +267,20 @@ export function computeAutoPoints(
   const anchor = ev.customDistance ? distanceAnchor(ev, gender, distanceMeters) : ev.anchors?.[gender];
   if (!anchor) return 0;
 
+  const gap = ev.cat === "track" ? anchor.base - anchor.elite : anchor.elite - anchor.base;
+  const zero = ev.cat === "track" ? anchor.base + gap * ZERO_MULTIPLIER : anchor.base - gap * ZERO_MULTIPLIER;
+
   let diff: number;
   let spread: number;
   if (ev.cat === "track") {
-    diff = anchor.base - value; // бег: меньше время — лучше
-    spread = anchor.base - anchor.elite;
+    diff = zero - value; // бег: меньше время — лучше
+    spread = zero - anchor.elite;
   } else {
-    diff = value - anchor.base; // прыжки/метания/сила/стрельба: больше — лучше
-    spread = anchor.elite - anchor.base;
+    diff = value - zero; // прыжки/метания/сила/стрельба: больше — лучше
+    spread = anchor.elite - zero;
   }
 
-  if (diff <= 0) {
-    // Результат хуже (или равен) базового уровня — линейно от BASE_POINTS
-    // (на границе норматива) до MIN_POINTS на границе ещё одного такого
-    // же размаха хуже.
-    const over = -diff;
-    const ratio = Math.min(1, over / spread);
-    return Math.max(MIN_POINTS, Math.round(BASE_POINTS - (BASE_POINTS - MIN_POINTS) * ratio));
-  }
-
-  // Результат лучше базового — прямая линия от BASE_POINTS до ELITE_POINTS.
-  const pts = BASE_POINTS + ((ELITE_POINTS - BASE_POINTS) * diff) / spread;
+  const pts = MIN_POINTS + ((ELITE_POINTS - MIN_POINTS) * diff) / spread;
   return Math.max(MIN_POINTS, Math.round(pts));
 }
 
@@ -287,12 +293,13 @@ export function formulaNote(
 ): string {
   const anchor = ev.customDistance ? distanceAnchor(ev, gender, distanceMeters) : ev.anchors?.[gender];
   if (!anchor) return "";
-  const dir = ev.cat === "track" ? `${anchor.base.toFixed(1)} − результат` : `результат − ${anchor.base.toFixed(1)}`;
   const unit =
     ev.cat === "track" ? "с" : ev.cat === "strength" ? "раз" : ev.cat === "shooting" ? "очк." : "м";
+  const gap = ev.cat === "track" ? anchor.base - anchor.elite : anchor.elite - anchor.base;
+  const zero = ev.cat === "track" ? anchor.base + gap * ZERO_MULTIPLIER : anchor.base - gap * ZERO_MULTIPLIER;
+  const dir = ev.cat === "track" ? `${zero.toFixed(1)} − результат` : `результат − ${zero.toFixed(1)}`;
   const distNote = ev.customDistance
     ? ` Дистанция соревнования: ${distanceMeters ?? FALLBACK_DISTANCE[ev.key] ?? "?"} м.`
     : "";
-  const belowBaseNote = ` Результаты хуже базового норматива не сливаются в одну оценку — очки линейно снижаются от ${BASE_POINTS} (на границе базового норматива) до ${MIN_POINTS} (на границе ещё одного такого же размаха хуже).`;
-  return `Оценка (линейная шкала): P ≈ ${BASE_POINTS} + (${ELITE_POINTS} − ${BASE_POINTS}) × (${dir}) / размах ≈ ${pts} (минимум ${MIN_POINTS} балл).${belowBaseNote} Опора: элитный ${anchor.elite.toFixed(1)}${unit} → ${ELITE_POINTS}, базовый ${anchor.base.toFixed(1)}${unit} → ${BASE_POINTS}.${distNote}`;
+  return `Оценка (единая прямая, без излома): P ≈ ${MIN_POINTS} + (${ELITE_POINTS} − ${MIN_POINTS}) × (${dir}) / размах ≈ ${pts}. Опора: элитный ${anchor.elite.toFixed(1)}${unit} → ${ELITE_POINTS}, условный "нулевой" уровень ${zero.toFixed(1)}${unit} → ${MIN_POINTS}.${distNote}`;
 }
