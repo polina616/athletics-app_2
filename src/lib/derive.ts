@@ -45,9 +45,18 @@ export function protocolRows(entries: Entry[], eventKey: string, ageGroup: strin
     return ev.cat === "track" ? av - bv : bv - av;
   });
 
-  const validRows: ProtocolRow[] = valid.map((entry, idx) => {
+  // Одинаковый результат — одно и то же место (1,1,3,4,4,6...), а не
+  // просто порядковый номер строки.
+  const validRows: ProtocolRow[] = [];
+  let lastValue: number | null = null;
+  let lastPlace = 0;
+  valid.forEach((entry, idx) => {
     const { pts, source } = pointsForEntry(entry);
-    return { entry, pts, source, place: idx + 1 };
+    const value = entry.resultSeconds as number;
+    const place = value === lastValue ? lastPlace : idx + 1;
+    lastValue = value;
+    lastPlace = place;
+    validRows.push({ entry, pts, source, place });
   });
 
   const invalidRows: ProtocolRow[] = invalid.map((entry) => {
