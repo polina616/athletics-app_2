@@ -211,10 +211,9 @@ function ResultRow({
     </motion.tr>
   );
 }
-
 /** Расставляет места по уже отсортированному списку спортсменов с учётом
- *  равенства результата: одинаковый результат — одно и то же место
- *  (1,1,3,4,4,6...), а не просто порядковый номер строки. */
+ *  равенства результата: одинаковый результат — одно и то же место, БЕЗ
+ *  пропусков после связки (1,2,3,3,4,4,5...). */
 function computePlaces(
   sortedAthletes: Athlete[],
   entryByAthlete: Map<string, Entry>
@@ -222,9 +221,9 @@ function computePlaces(
   const places: number[] = [];
   let lastValue: number | null = null;
   let lastPlace = 0;
-  sortedAthletes.forEach((a, idx) => {
+  sortedAthletes.forEach((a) => {
     const value = entryByAthlete.get(a.id)!.resultSeconds as number;
-    const place = value === lastValue ? lastPlace : idx + 1;
+    const place = value === lastValue ? lastPlace : lastPlace + 1;
     lastValue = value;
     lastPlace = place;
     places.push(place);
