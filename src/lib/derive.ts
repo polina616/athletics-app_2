@@ -370,3 +370,68 @@ export function athleteEventBreakdown(entries: Entry[], athleteId: string): Athl
 
   return rows.sort((a, b) => a.eventName.localeCompare(b.eventName, "ru"));
 }
+export interface TeamTop3Athlete {
+  athleteId: string;
+  athleteName: string;
+  bib: string | null;
+  ageGroup: string;
+  gender: Gender;
+  /** личная сумма очков по многоборью (все дисциплины, без эстафеты) */
+  total: number;
+  perEvent: Record<string, number>;
+}
+
+export interface TeamTop3Standing {
+  teamId: string;
+  teamName: string;
+  /** до трёх спортсменов с наибольшей личной суммой, зачтённых в команду */
+  top3: TeamTop3Athlete[];
+  total: number;
+}
+
+/** Командный зачёт по системе "три лучших участника": для каждой команды
+ *  берём личные суммы (многоборье по всем дисциплинам, БЕЗ эстафеты — она
+ *  не привязана к одному спортсмену) всех её спортсменов и суммируем
+ *  очки трёх лучших. Если в команде меньше трёх спортсменов с
+ *  результатами — считаем по тем, что есть. */
+export function computeTeamStandingsTop3(
+  entries: Entry[],
+  teams: Team[],
+  athletes: Athlete[]
+): TeamTop3Standing[] {
+  const totalsByAthlete = new Map<string, { total: number; perEvent: Record<string, number> }>();
+  for (const e of entries) {
+    if (e.deleted) continue;
+    const { pts } = pointsForEntry(e);
+    const cur = totalsByAthlete.get(e.athleteId) ?? { total: 0, perEvent: {} };
+    cur.total += pts;
+    cur.perEvent[e.eventKey] = (cur.perEvent[e.eventKey] ?? 0) + pts;
+    totalsByAthlete.set(e.athleteId, cur);
+  }
+
+  return teams
+    .map((t) => {
+      const teamAthletes = athletes.filter((a) => !a.deleted && a.teamId === t.id);
+      const withTotals: TeamTop3Athlete[] = teamAthletes
+        .map((a) => {
+          const data = totalsByAthlete.get(a.id);
+          if (!data || data.total === 0) return null;
+          return {
+            athleteId: a.id,
+            athleteName: a.fullName,
+            bib: a.bib,
+            ageGroup: a.ageGroup,
+            gender: a.gender,
+            total: data.total,
+            perEvent: data.perEvent,
+          };
+        })
+        .filter((x): x is TeamTop3Athlete => x !== null)
+        .sort((a, b) => b.total - a.total);
+
+      const top3 = withTotals.slice(0, 3);
+      const total = top3.reduce((s, a) => s + a.total, 0);
+      return { teamId: t.id, teamName: t.name, top3, total };
+    })
+    .sort((a, b) => b.total - a.total);
+}
