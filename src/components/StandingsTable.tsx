@@ -91,7 +91,7 @@ const top3Standings = computeTeamStandingsTop3(filteredEntries, teams, athletes,
           <p className="text-xs text-muted">
             {scoringMode === "all"
               ? "Сумма очков всех результатов команды. Нажмите на команду для детализации по дисциплинам."
-              : "Сумма личных многоборных очков трёх лучших спортсменов команды (без эстафеты). Нажмите на команду, чтобы увидеть, кто вошёл в тройку."}
+              : "Сумма личных многоборных очков 3 лучших юношей и 3 лучших девушек команды плюс эстафета. Нажмите на команду, чтобы увидеть, кто вошёл в зачёт."}
           </p>
         </div>
 
@@ -139,6 +139,10 @@ const top3Standings = computeTeamStandingsTop3(filteredEntries, teams, athletes,
         <div className="space-y-2">
           {breakdowns.map((team, rank) => {
             const isExpanded = expandedTeam === team.teamId;
+          const genderGroups = [
+  { label: "Юноши", g: "м" as Gender, list: team.boys },
+  { label: "Девушки", g: "ж" as Gender, list: team.girls },
+].filter((gr) => genderFilter === "all" || genderFilter === gr.g);
             const groups = isExpanded ? groupRowsByEvent(team.rows) : [];
 
             return (
@@ -284,8 +288,10 @@ const top3Standings = computeTeamStandingsTop3(filteredEntries, teams, athletes,
                     </span>
                     <span className="font-semibold text-sm">{team.teamName}</span>
                     <span className="text-[10px] font-bold num bg-white/10 text-muted px-1.5 py-0.5 rounded-full">
-                      {team.top3.length}/3
-                    </span>
+  {genderFilter !== "ж" && <>Ю {team.boys.length}/3</>}
+  {genderFilter === "all" && " · "}
+  {genderFilter !== "м" && <>Д {team.girls.length}/3</>}
+</span>
                   </div>
 
                   <div className="flex items-center gap-3">
@@ -311,55 +317,62 @@ const top3Standings = computeTeamStandingsTop3(filteredEntries, teams, athletes,
                       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                       className="overflow-hidden"
                     >
-                                            <div className="p-3 bg-[var(--surface)] border-t border-white/10 text-xs space-y-2">
-                        {team.top3.length === 0 ? (
-                          <p className="text-muted italic">
-                            Нет спортсменов с результатами по индивидуальным дисциплинам.
-                          </p>
-                        ) : (
-                          <table className="w-full text-left">
-                            <thead className="text-muted font-bold border-b border-white/5">
-                              <tr>
-                                <th className="py-1 w-8">#</th>
-                                <th className="py-1 w-14">№</th>
-                                <th className="py-1">Спортсмен</th>
-                                <th className="py-1">Категория</th>
-                                <th className="py-1">Видов</th>
-                                <th className="py-1 text-right">Личная сумма</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                              {team.top3.map((a, idx) => (
-                                <tr key={a.athleteId}>
-                                  <td className="py-1.5 num text-muted">
-                                    <span
-                                      className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${medalClass(idx + 1)}`}
-                                    >
-                                      {idx + 1}
-                                    </span>
-                                  </td>
-                                  <td className="py-1.5 num text-muted">{a.bib ?? "—"}</td>
-                                  <td className="py-1.5 font-medium">{a.athleteName}</td>
-                                  <td className="py-1.5 text-[var(--ink)]/70">
-                                    {a.ageGroup} ({a.gender === "м" ? "Ю" : "Д"})
-                                  </td>
-                                  <td className="py-1.5 num text-muted">{Object.keys(a.perEvent).length}</td>
-                                  <td className="py-1.5 text-right font-bold num text-track">+{a.total}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        )}
+                                            <div className="p-3 bg-[var(--surface)] border-t border-white/10 text-xs space-y-4">
+  {genderGroups.map((group) => (
+    <div key={group.g} className="space-y-1.5">
+      <div className="font-bold text-blue uppercase text-[10px] tracking-wide border-b border-white/5 pb-1">
+        {group.label}
+        <span className="text-muted font-normal normal-case ml-1.5">
+          ({group.list.reduce((s, a) => s + a.total, 0)} очк.)
+        </span>
+      </div>
 
-                        {team.relayPts > 0 && (
-                          <div className="flex items-center justify-between border-t border-white/5 pt-2">
-                            <span className="text-blue font-bold uppercase text-[10px] tracking-wide">
-                              + Эстафета
-                            </span>
-                            <span className="font-bold num text-track">+{team.relayPts}</span>
-                          </div>
-                        )}
-                      </div>
+      {group.list.length === 0 ? (
+        <p className="text-muted italic">Нет спортсменов с результатами.</p>
+      ) : (
+        <table className="w-full text-left">
+          <thead className="text-muted font-bold border-b border-white/5">
+            <tr>
+              <th className="py-1 w-8">#</th>
+              <th className="py-1 w-14">№</th>
+              <th className="py-1">Спортсмен</th>
+              <th className="py-1">Категория</th>
+              <th className="py-1">Видов</th>
+              <th className="py-1 text-right">Личная сумма</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {group.list.map((a, idx) => (
+              <tr key={a.athleteId}>
+                <td className="py-1.5 num text-muted">
+                  <span
+                    className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold ${medalClass(idx + 1)}`}
+                  >
+                    {idx + 1}
+                  </span>
+                </td>
+                <td className="py-1.5 num text-muted">{a.bib ?? "—"}</td>
+                <td className="py-1.5 font-medium">{a.athleteName}</td>
+                <td className="py-1.5 text-[var(--ink)]/70">
+                  {a.ageGroup} ({a.gender === "м" ? "Ю" : "Д"})
+                </td>
+                <td className="py-1.5 num text-muted">{Object.keys(a.perEvent).length}</td>
+                <td className="py-1.5 text-right font-bold num text-track">+{a.total}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  ))}
+
+  {team.relayPts > 0 && (
+    <div className="flex items-center justify-between border-t border-white/5 pt-2">
+      <span className="text-blue font-bold uppercase text-[10px] tracking-wide">+ Эстафета</span>
+      <span className="font-bold num text-track">+{team.relayPts}</span>
+    </div>
+  )}
+</div>
                     </motion.div>
                   )}
                 </AnimatePresence>
