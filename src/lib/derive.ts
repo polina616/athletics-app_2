@@ -324,3 +324,50 @@ export function teamStandingsByEvent(
 
   return result.sort((a, b) => a.eventName.localeCompare(b.eventName, "ru"));
 }
+export interface AthleteEventBreakdownRow {
+  eventKey: string;
+  eventName: string;
+  status: Entry["status"];
+  resultRaw: string;
+  pts: number;
+  source: PointsResult["source"];
+  /** место спортсмена в этой дисциплине (в рамках его категории) */
+  place: number | null;
+}
+
+/** Детализация одного спортсмена в личном многоборном зачёте: по каждой
+ *  дисциплине, в которой у него есть результат — результат, место в этой
+ *  дисциплине (в рамках его же возраста/пола) и очки. Используется при
+ *  раскрытии строки спортсмена в личном зачёте (StandingsTabs), чтобы
+ *  было видно, откуда взялась итоговая сумма. */
+export function athleteEventBreakdown(entries: Entry[], athleteId: string): AthleteEventBreakdownRow[] {
+  const athleteEntries = entries.filter((e) => !e.deleted && e.athleteId === athleteId);
+
+  // Кэшируем protocolRows по комбинации (дисциплина, возраст, пол) — у
+  // одного спортсмена комбинация обычно одна и та же на все его записи,
+  // но на всякий случай (правка возраста/пола задним числом) считаем по
+  // фактической комбинации каждой записи.
+  const comboCache = new Map<string, ProtocolRow[]>();
+
+  const rows: AthleteEventBreakdownRow[] = athleteEntries.map((e) => {
+    const comboKey = `${e.eventKey}__${e.ageGroup}__${e.gender}`;
+    let catRows = comboCache.get(comboKey);
+    if (!catRows) {
+      catRows = protocolRows(entries, e.eventKey, e.ageGroup, e.gender);
+      comboCache.set(comboKey, catRows);
+    }
+    const matched = catRows.find((r) => r.entry.id === e.id);
+    const { pts, source } = pointsForEntry(e);
+    return {
+      eventKey: e.eventKey,
+      eventName: getEvent(e.eventKey).name,
+      status: e.status,
+      resultRaw: e.resultRaw,
+      pts,
+      source,
+      place: matched?.place ?? null,
+    };
+  });
+
+  return rows.sort((a, b) => a.eventName.localeCompare(b.eventName, "ru"));
+}
