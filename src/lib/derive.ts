@@ -45,20 +45,19 @@ export function protocolRows(entries: Entry[], eventKey: string, ageGroup: strin
     return ev.cat === "track" ? av - bv : bv - av;
   });
 
-  // Одинаковый результат — одно и то же место (1,1,3,4,4,6...), а не
-  // просто порядковый номер строки.
+  // Одинаковый результат — одно и то же место, БЕЗ пропусков после связки
+  // (1,2,3,3,4,4,5...), а не спортивное competition ranking (1,2,3,3,5...).
   const validRows: ProtocolRow[] = [];
   let lastValue: number | null = null;
   let lastPlace = 0;
-  valid.forEach((entry, idx) => {
+  valid.forEach((entry) => {
     const { pts, source } = pointsForEntry(entry);
     const value = entry.resultSeconds as number;
-    const place = value === lastValue ? lastPlace : idx + 1;
+    const place = value === lastValue ? lastPlace : lastPlace + 1;
     lastValue = value;
     lastPlace = place;
     validRows.push({ entry, pts, source, place });
   });
-
   const invalidRows: ProtocolRow[] = invalid.map((entry) => {
     const { pts, source } = pointsForEntry(entry);
     return { entry, pts, source, place: null };
