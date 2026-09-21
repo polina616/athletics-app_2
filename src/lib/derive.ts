@@ -435,3 +435,102 @@ export function computeTeamStandingsTop3(
     })
     .sort((a, b) => b.total - a.total);
 }
+export interface EventTeamTop3Athlete {
+  athleteId: string;
+  athleteName: string;
+  bib: string | null;
+  ageGroup: string;
+  gender: Gender;
+  status: Entry["status"];
+  resultRaw: string;
+  pts: number;
+  /** место в общем протоколе этой дисциплины (не только среди тройки) */
+  place: number | null;
+}
+
+export interface EventTeamTop3Standing {
+  teamId: string;
+  teamName: string;
+  top3: EventTeamTop3Athlete[];
+  total: number;
+}
+
+export interface EventTeamStandingsTop3 {
+  eventKey: string;
+  eventName: string;
+  standings: EventTeamTop3Standing[];
+}
+
+/** Как teamStandingsByEvent(), но по системе "три лучших участника
+ *  команды в этой дисциплине" — для каждой дисциплины отдельно берём трёх
+ *  спортсменов команды с наибольшими очками именно в ней (не по общей
+ *  многоборной сумме) и суммируем. */
+export function teamStandingsByEventTop3(
+  entries: Entry[],
+  teams: Team[],
+  relayTeams: RelayTeam[] = []
+): EventTeamStandingsTop3[] {
+  const eventKeys = Array.from(new Set(entries.filter((e) => !e.deleted).map((e) => e.eventKey)));
+
+  const result: EventTeamStandingsTop3[] = eventKeys.map((eventKey) => {
+    const eventEntries = entries.filter((e) => !e.deleted && e.eventKey === eventKey);
+
+    // Строим места по КАЖДОЙ категории (возраст×пол) этой дисциплины —
+    // как protocolRows(), но нужны места сразу по всем категориям вместе.
+    const placeByEntryId = new Map<string, number | null>();
+    const combos = new Map<string, { ageGroup: string; gender: Gender }>();
+    for (const e of eventEntries) {
+      const key = `${e.ageGroup}__${e.gender}`;
+      if (!combos.has(key)) combos.set(key, { ageGroup: e.ageGroup, gender: e.gender });
+    }
+    for (const { ageGroup, gender } of combos.values()) {
+      for (const row of protocolRows(entries, eventKey, ageGroup, gender)) {
+        placeByEntryId.set(row.entry.id, row.place);
+      }
+    }
+
+    const standings: EventTeamTop3Standing[] = teams
+      .map((t) => {
+        const teamEntries = eventEntries.filter((e) => e.teamId === t.id);
+        const withPts: EventTeamTop3Athlete[] = teamEntries
+          .map((e) => {
+            const { pts } = pointsForEntry(e);
+            return {
+              athleteId: e.athleteId,
+              athleteName: e.athleteName,
+              bib: e.bib,
+              ageGroup: e.ageGroup,
+              gender: e.gender,
+              status: e.status,
+              resultRaw: e.resultRaw,
+              pts,
+              place: placeByEntryId.get(e.id) ?? null,
+            };
+          })
+          .sort((a, b) => b.pts - a.pts);
+
+        const top3 = withPts.slice(0, 3);
+        const total = top3.reduce((s, a) => s + a.pts, 0);
+        return { teamId: t.id, teamName: t.name, top3, total };
+      })
+      .sort((a, b) => b.total - a.total);
+
+    return { eventKey, eventName: getEvent(eventKey).name, standings };
+  });
+
+  // Эстафета — командная по своей природе (один результат на всю
+  // команду, не на спортсмена), поэтому "три лучших участника" к ней не
+  // применимо. Показываем как есть (весь результат = очки команды), как
+  // в обычном teamStandingsByEvent().
+  const activeRelayTeams = relayTeams.filter((r) => !r.deleted);
+  if (activeRelayTeams.length > 0) {
+    const relayStandings = computeTeamStandings([], teams, activeRelayTeams);
+    result.push({
+      eventKey: "relay",
+      eventName: getEvent("relay").name,
+      standings: relayStandings.map((s) => ({ teamId: s.teamId, teamName: s.teamName, top3: [], total: s.total })),
+    });
+  }
+
+  return result.sort((a, b) => a.eventName.localeCompare(b.eventName, "ru"));
+}
