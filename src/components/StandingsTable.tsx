@@ -340,9 +340,11 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
                           : "bg-white/10 text-[var(--ink)]"
                       }`}
                     >
+                                          >
                       {rank + 1}
                     </span>
-                                        <span className="text-[10px] font-bold num bg-white/10 text-muted px-1.5 py-0.5 rounded-full">
+                    <span className="font-semibold text-sm">{team.teamName}</span>
+                    <span className="text-[10px] font-bold num bg-white/10 text-muted px-1.5 py-0.5 rounded-full">
                       {genderFilter !== "ж" && <>Ю {team.boys.length}</>}
                       {genderFilter === "all" && " · "}
                       {genderFilter !== "м" && <>Д {team.girls.length}</>}
