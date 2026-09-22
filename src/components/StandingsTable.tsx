@@ -12,6 +12,9 @@ import EmptyState from "./ui/EmptyState";
 
 type TeamGenderFilter = "all" | Gender;
 type ScoringMode = "all" | "top3";
+/** "all" — сумма по всем возрастным группам сразу, иначе — конкретная
+ *  возрастная группа из meet.ageGroups. */
+type AgeGroupFilter = "all" | string;
 
 /** Группирует строки раскладки команды по дисциплине — "откуда сколько
  *  очков и кто принёс" читается по видам, а не одним общим списком. */
@@ -43,8 +46,10 @@ const medalClass = (place: number) =>
 export default function StandingsTable({ meetId }: { meetId: string }) {
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const [genderFilter, setGenderFilter] = useState<TeamGenderFilter>("all");
+  const [ageGroupFilter, setAgeGroupFilter] = useState<AgeGroupFilter>("all");
   const [scoringMode, setScoringMode] = useState<ScoringMode>("all");
 
+  const meet = useLiveQuery(() => db.meets.get(meetId), [meetId]);
   const teams = useLiveQuery(
     () => db.teams.where({ meetId }).filter((t) => !t.deleted).toArray(),
     [meetId]
@@ -62,18 +67,25 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
     [meetId]
   );
 
-  if (!teams || !entries || !relayTeams || !athletes) return <div className="skeleton h-48 rounded-xl2" />;
+  if (!meet || !teams || !entries || !relayTeams || !athletes) return <div className="skeleton h-48 rounded-xl2" />;
 
-  const filteredEntries = genderFilter === "all" ? entries : entries.filter((e) => e.gender === genderFilter);
+  const genderEntries = genderFilter === "all" ? entries : entries.filter((e) => e.gender === genderFilter);
+  const genderRelayTeams = genderFilter === "all" ? relayTeams : relayTeams.filter((r) => r.gender === genderFilter);
+
+  const filteredEntries =
+    ageGroupFilter === "all" ? genderEntries : genderEntries.filter((e) => e.ageGroup === ageGroupFilter);
   const filteredRelayTeams =
-    genderFilter === "all" ? relayTeams : relayTeams.filter((r) => r.gender === genderFilter);
+    ageGroupFilter === "all" ? genderRelayTeams : genderRelayTeams.filter((r) => r.ageGroup === ageGroupFilter);
 
   // Режим "все участники" — сумма очков со всех результатов
   // (индивидуальные + эстафета), с раскрытием по дисциплинам.
   const breakdowns = teamBreakdowns(filteredEntries, teams, filteredRelayTeams, athletes);
 
   // Режим "три лучших" — личные многоборные суммы 3 лучших юношей и
-  // 3 лучших девушек команды + очки за эстафету.
+  // 3 лучших девушек команды + очки за эстафету. entries уже отфильтрованы
+  // по возрастной группе, поэтому личная сумма спортсмена автоматически
+  // считается только по результатам в выбранной категории — athletes
+  // фильтровать отдельно не нужно.
   const top3Standings = computeTeamStandingsTop3(filteredEntries, teams, athletes, filteredRelayTeams);
 
   const filterOptions: { key: TeamGenderFilter; label: string }[] = [
@@ -82,12 +94,21 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
     { key: "ж", label: "Девушки" },
   ];
 
+  const ageGroupOptions: { key: AgeGroupFilter; label: string }[] = [
+    { key: "all", label: "Все возраста" },
+    ...meet.ageGroups.map((ag) => ({ key: ag, label: ag })),
+  ];
+
   const modeOptions: { key: ScoringMode; label: string }[] = [
     { key: "all", label: "Все участники" },
     { key: "top3", label: "Три лучших" },
   ];
 
   const isEmpty = scoringMode === "all" ? breakdowns.length === 0 : top3Standings.length === 0;
+
+  function resetExpanded() {
+    setExpandedTeam(null);
+  }
 
   return (
     <div className="card-flat p-5 rounded-xl space-y-4">
@@ -98,6 +119,7 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
             {scoringMode === "all"
               ? "Сумма очков всех результатов команды. Нажмите на команду для детализации по дисциплинам."
               : "Сумма личных многоборных очков 3 лучших юношей и 3 лучших девушек команды плюс эстафета. Нажмите на команду, чтобы увидеть, кто вошёл в зачёт."}
+            {ageGroupFilter !== "all" && ` Показана только возрастная группа «${ageGroupFilter}».`}
           </p>
         </div>
 
@@ -108,7 +130,7 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
               type="button"
               onClick={() => {
                 setScoringMode(opt.key);
-                setExpandedTeam(null);
+                resetExpanded();
               }}
               className={`px-3 py-1 rounded-full text-xs font-bold transition border ${
                 scoringMode === opt.key
@@ -126,7 +148,10 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
             <button
               key={opt.key}
               type="button"
-              onClick={() => setGenderFilter(opt.key)}
+              onClick={() => {
+                setGenderFilter(opt.key);
+                resetExpanded();
+              }}
               className={`px-3 py-1 rounded-full text-xs font-bold transition border ${
                 genderFilter === opt.key
                   ? "bg-track border-track text-white"
@@ -137,10 +162,32 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
             </button>
           ))}
         </div>
+
+        {meet.ageGroups.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {ageGroupOptions.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => {
+                  setAgeGroupFilter(opt.key);
+                  resetExpanded();
+                }}
+                className={`px-3 py-1 rounded-full text-xs font-bold num transition border ${
+                  ageGroupFilter === opt.key
+                    ? "bg-gold border-gold text-black"
+                    : "border-white/10 text-muted hover:text-[var(--ink)] hover:border-white/20"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {isEmpty ? (
-        <EmptyState title="Команды ещё не добавлены" />
+        <EmptyState title="Результатов пока нет" />
       ) : scoringMode === "all" ? (
         <div className="space-y-2">
           {breakdowns.map((team, rank) => {
