@@ -328,7 +328,7 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
                   onClick={() => setExpandedTeam(isExpanded ? null : team.teamId)}
                   className="w-full flex items-center justify-between p-3 text-left hover:bg-white/[0.04] transition"
                 >
-                  <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-3">
                     <span
                       className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs num ${
                         rank === 0
@@ -340,7 +340,6 @@ export default function StandingsTable({ meetId }: { meetId: string }) {
                           : "bg-white/10 text-[var(--ink)]"
                       }`}
                     >
-                                          >
                       {rank + 1}
                     </span>
                     <span className="font-semibold text-sm">{team.teamName}</span>
