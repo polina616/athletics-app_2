@@ -441,11 +441,31 @@ export function computeTeamStandingsTop3(
             perEvent: data.perEvent,
           };
         })
-        .filter((x): x is TeamTop3Athlete => x !== null)
-        .sort((a, b) => b.total - a.total);
+        .filter((x): x is TeamTop3Athlete => x !== null);
 
-      const boys = withTotals.filter((a) => a.gender === "м").slice(0, 3);
-      const girls = withTotals.filter((a) => a.gender === "ж").slice(0, 3);
+            // "Три лучших" считается ОТДЕЛЬНО в рамках каждой возрастной
+      // группы (а не три лучших по команде вообще) — так при фильтре
+      // "Все возраста" зачёт складывается из трёх лучших юношей и трёх
+      // лучших девушек КАЖДОЙ возрастной группы, а не только самой
+      // сильной. При выбранной конкретной группе результат тот же, что
+      // и раньше (в наборе всего одна группа).
+      const byAgeGroup = new Map<string, TeamTop3Athlete[]>();
+      for (const a of withTotals) {
+        const list = byAgeGroup.get(a.ageGroup) ?? [];
+        list.push(a);
+        byAgeGroup.set(a.ageGroup, list);
+      }
+
+      const boys: TeamTop3Athlete[] = [];
+      const girls: TeamTop3Athlete[] = [];
+      for (const list of byAgeGroup.values()) {
+        const sorted = [...list].sort((a, b) => b.total - a.total);
+        boys.push(...sorted.filter((a) => a.gender === "м").slice(0, 3));
+        girls.push(...sorted.filter((a) => a.gender === "ж").slice(0, 3));
+      }
+      boys.sort((a, b) => b.total - a.total);
+      girls.sort((a, b) => b.total - a.total);
+
       const relayPts = relayPtsByTeam.get(t.id) ?? 0;
       const total =
         boys.reduce((s, a) => s + a.total, 0) + girls.reduce((s, a) => s + a.total, 0) + relayPts;
