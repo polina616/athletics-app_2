@@ -182,14 +182,14 @@ export default function StandingsTabs({ meetId }: { meetId: string }) {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                          {rows.map((r) => {
-                            const isExpanded = expandedAthleteId === r.athleteId;
+                                                    {rows.map((r) => {
+                            const isExpanded = expandedAthleteIds.has(r.athleteId);
                             const breakdown = isExpanded ? athleteEventBreakdown(entries, r.athleteId) : [];
                             return (
                               <>
                                 <tr
                                   key={r.athleteId}
-                                  onClick={() => setExpandedAthleteId(isExpanded ? null : r.athleteId)}
+                                  onClick={() => toggleAthlete(r.athleteId)}
                                   className="hover:bg-white/[0.04] transition-colors cursor-pointer"
                                 >
                                   <td className="py-2 font-bold num text-muted">
