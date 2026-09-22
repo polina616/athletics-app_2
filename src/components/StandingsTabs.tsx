@@ -30,7 +30,16 @@ const medalClass = (place: number) =>
 export default function StandingsTabs({ meetId }: { meetId: string }) {
   const [activeTab, setActiveTab] = useState<Tab>("protocols");
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
-  const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null);
+    const [expandedAthleteIds, setExpandedAthleteIds] = useState<Set<string>>(new Set());
+
+  function toggleAthlete(athleteId: string) {
+    setExpandedAthleteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(athleteId)) next.delete(athleteId);
+      else next.add(athleteId);
+      return next;
+    });
+  }
 
   const meet = useLiveQuery(() => db.meets.get(meetId), [meetId]);
   const entries = useLiveQuery(
