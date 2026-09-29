@@ -10,6 +10,17 @@
 
 create extension if not exists "uuid-ossp";
 
+-- Keep updated_at fresh on every UPDATE — the sync engine relies on this
+-- column to decide which copy (local vs. remote) is newer.
+-- ВАЖНО: функция объявлена ДО всех триггеров, которые на неё ссылаются.
+create or replace function public.touch_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
 -- ---------- MEETS ----------
 create table if not exists public.meets (
   id                 uuid primary key default uuid_generate_v4(),
@@ -77,6 +88,7 @@ create table if not exists public.entries (
   updated_at      timestamptz not null default now(),
   deleted         boolean not null default false
 );
+
 -- ---------- RELAY TEAMS ----------
 create table if not exists public.relay_teams (
   id              uuid primary key,
@@ -95,27 +107,14 @@ create table if not exists public.relay_teams (
   deleted         boolean not null default false
 );
 
-create index if not exists relay_teams_meet_idx on public.relay_teams(meet_id);
-
-drop trigger if exists trg_relay_teams_updated on public.relay_teams;
-create trigger trg_relay_teams_updated before update on public.relay_teams
-  for each row execute function public.touch_updated_at();
-
+-- ---------- INDEXES ----------
 create index if not exists teams_meet_idx on public.teams(meet_id);
 create index if not exists athletes_meet_idx on public.athletes(meet_id);
 create index if not exists entries_meet_idx on public.entries(meet_id);
 create index if not exists entries_event_idx on public.entries(meet_id, event_key, age_group, gender);
+create index if not exists relay_teams_meet_idx on public.relay_teams(meet_id);
 
--- Keep updated_at fresh on every UPDATE — the sync engine relies on this
--- column to decide which copy (local vs. remote) is newer.
-create or replace function public.touch_updated_at()
-returns trigger language plpgsql as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
-
+-- ---------- TRIGGERS ----------
 drop trigger if exists trg_meets_updated on public.meets;
 create trigger trg_meets_updated before update on public.meets
   for each row execute function public.touch_updated_at();
@@ -130,6 +129,10 @@ create trigger trg_athletes_updated before update on public.athletes
 
 drop trigger if exists trg_entries_updated on public.entries;
 create trigger trg_entries_updated before update on public.entries
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists trg_relay_teams_updated on public.relay_teams;
+create trigger trg_relay_teams_updated before update on public.relay_teams
   for each row execute function public.touch_updated_at();
 
 -- ============================================================
