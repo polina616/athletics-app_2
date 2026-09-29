@@ -313,3 +313,26 @@ export function stopAutoSync() {
   if (syncTimer) clearInterval(syncTimer);
   syncTimer = null;
 }
+/** Подтягивает с сервера ВСЕ соревнования этого пользователя (для нового
+ *  устройства/после очистки браузера) и, для ещё не синхронизированных
+ *  локально, — их команды, спортсменов и результаты. */
+export async function pullMeetsForOwner(ownerId: string): Promise<{ ok: boolean; error?: string }> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return { ok: false, error: "offline" };
+  try {
+    const { data, error } = await supabase.from("meets").select("*").eq("owner_id", ownerId);
+    if (error) throw error;
+
+    for (const r of data ?? []) {
+      await mergeRemote(db.meets, rowToMeet(r));
+      const since = await getLastSyncedAt(r.id);
+      if (!since) {
+        const res = await pullRemote(r.id);
+        if (!res.ok) console.warn("[sync] initial pull failed for meet", r.id, res.error);
+      }
+    }
+    return { ok: true };
+  } catch (err: any) {
+    console.error("[sync] pullMeetsForOwner failed", err);
+    return { ok: false, error: err.message ?? String(err) };
+  }
+}
