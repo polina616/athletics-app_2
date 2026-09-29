@@ -125,7 +125,9 @@ function RelayResultRow({
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.2 }}
-      className="group hover:bg-white/[0.04] transition-colors"
+      onClick={onStartEdit}
+      title="Нажмите, чтобы ввести/изменить результат"
+      className="group hover:bg-white/[0.04] transition-colors cursor-pointer"
     >
       <td className="py-1.5 font-bold num text-muted">
         {place ? (
@@ -141,32 +143,39 @@ function RelayResultRow({
         <div className="text-[10px] text-muted">{legNames.join(" → ")}</div>
       </td>
       <td
-        onClick={onStartEdit}
-        className={`py-1.5 num font-bold cursor-pointer ${
+        className={`py-1.5 num font-bold ${
           relayTeam.status ? "text-status-fail" : isOK ? "text-status-ok" : "text-muted italic"
         }`}
-        title="Нажмите, чтобы ввести/изменить результат"
       >
         {resText}
       </td>
       <td className="py-1.5 text-right whitespace-nowrap">
         <span className="num font-bold text-track mr-2">{pts || "—"}</span>
         <button
-          onClick={onEditComposition}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEditComposition();
+          }}
           className="opacity-0 group-hover:opacity-100 text-xs text-muted hover:text-blue transition px-1"
           title="Изменить состав по этапам"
         >
           👥
         </button>
         <button
-          onClick={onStartEdit}
+          onClick={(e) => {
+            e.stopPropagation();
+            onStartEdit();
+          }}
           className="opacity-0 group-hover:opacity-100 text-xs text-muted hover:text-blue transition px-1"
           title="Ввести результат"
         >
           ✎
         </button>
         <button
-          onClick={handleDelete}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDelete();
+          }}
           className="opacity-0 group-hover:opacity-100 text-xs text-muted hover:text-status-fail transition px-1"
           title="Удалить команду"
         >
@@ -253,7 +262,7 @@ export default function RelayProtocolTable({ meetId }: { meetId: string }) {
         </h3>
         <p className="text-[11px] text-muted mt-1">
           Для каждой команды сначала укажите состав по этапам, затем внесите один общий результат на всю
-          команду. В протоколе отображаются только заявленные эстафетные команды.
+          команду (нажмите на строку команды). В протоколе отображаются только заявленные эстафетные команды.
         </p>
       </div>
 
