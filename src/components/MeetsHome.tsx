@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { pullMeetsForOwner } from "@/lib/sync";
 import { useLiveQuery } from "dexie-react-hooks";
 import { motion } from "framer-motion";
 import { db } from "@/lib/db";
@@ -34,7 +35,21 @@ export default function MeetsHome({ ownerId, onSelect }: Props) {
     const rows = await db.meets.where({ ownerId }).toArray();
     return rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }, [ownerId]);
+  const [remoteLoading, setRemoteLoading] = useState(true);
 
+useEffect(() => {
+  let cancelled = false;
+  const run = async () => {
+    await pullMeetsForOwner(ownerId);
+    if (!cancelled) setRemoteLoading(false);
+  };
+  run();
+  window.addEventListener("online", run);
+  return () => {
+    cancelled = true;
+    window.removeEventListener("online", run);
+  };
+}, [ownerId]);
   async function handleDelete(id: string, name: string) {
     if (
       !confirm(
@@ -53,7 +68,7 @@ export default function MeetsHome({ ownerId, onSelect }: Props) {
   }
 
   // Пока загружается список — не мигаем формой создания.
-  if (meets === undefined) {
+ if (meets === undefined || (remoteLoading && meets.length === 0))  {
     return (
       <div className="max-w-2xl mx-auto p-6 space-y-3">
         <div className="skeleton h-10 w-2/3 rounded-xl2" />
