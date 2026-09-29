@@ -166,7 +166,9 @@ function ResultRow({
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.2 }}
-      className="group hover:bg-white/[0.04] transition-colors"
+      onClick={onStartEdit}
+      title="Нажмите, чтобы ввести/изменить результат"
+      className="group hover:bg-white/[0.04] transition-colors cursor-pointer"
     >
       <td className="py-1.5 font-bold num text-muted">
         {place ? (
@@ -181,18 +183,19 @@ function ResultRow({
       <td className="py-1.5 font-medium">{athlete.fullName}</td>
       <td className="py-1.5 text-[var(--ink)]/70">{teamName}</td>
       <td
-        onClick={onStartEdit}
-        className={`py-1.5 num font-bold cursor-pointer ${
+        className={`py-1.5 num font-bold ${
           entry ? (isOK ? "text-status-ok" : "text-status-fail") : "text-muted italic"
         }`}
-        title="Нажмите, чтобы ввести/изменить результат"
       >
         {resText}
       </td>
       <td className="py-1.5 text-right num font-bold text-track">{pts ?? "—"}</td>
       <td className="py-1.5 text-right whitespace-nowrap">
         <button
-          onClick={onStartEdit}
+          onClick={(e) => {
+            e.stopPropagation();
+            onStartEdit();
+          }}
           className="opacity-0 group-hover:opacity-100 text-xs text-muted hover:text-blue transition px-1"
           title={entry ? "Редактировать результат" : "Ввести результат"}
         >
@@ -200,7 +203,10 @@ function ResultRow({
         </button>
         {entry && (
           <button
-            onClick={handleDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete();
+            }}
             className="opacity-0 group-hover:opacity-100 text-xs text-muted hover:text-status-fail transition px-1"
             title="Удалить результат"
           >
@@ -300,43 +306,43 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
   });
 
   const categoryTables = pairs.map(({ ag, g }) => {
-      const eligibleAthletes = athletes.filter((a) => a.ageGroup === ag && a.gender === g);
-      const entryByAthlete = new Map(
-        entries.filter((e) => e.ageGroup === ag && e.gender === g).map((e) => [e.athleteId, e])
-      );
+    const eligibleAthletes = athletes.filter((a) => a.ageGroup === ag && a.gender === g);
+    const entryByAthlete = new Map(
+      entries.filter((e) => e.ageGroup === ag && e.gender === g).map((e) => [e.athleteId, e])
+    );
 
-      const withResult = eligibleAthletes.filter((a) => {
-        const e = entryByAthlete.get(a.id);
-        return e && !e.status && e.resultSeconds !== null;
-      });
-      const withStatus = eligibleAthletes.filter((a) => {
-        const e = entryByAthlete.get(a.id);
-        return e && (e.status || e.resultSeconds === null);
-      });
-      const noResult = eligibleAthletes.filter((a) => !entryByAthlete.has(a.id));
-
-      withResult.sort((a, b) => {
-        const av = entryByAthlete.get(a.id)!.resultSeconds as number;
-        const bv = entryByAthlete.get(b.id)!.resultSeconds as number;
-        return eventConfig.cat === "track" ? av - bv : bv - av;
-      });
-      withStatus.sort((a, b) => a.fullName.localeCompare(b.fullName, "ru"));
-      noResult.sort((a, b) => a.fullName.localeCompare(b.fullName, "ru"));
-
-      const withResultPlaces = computePlaces(withResult, entryByAthlete);
-
-      const rows = [
-        ...withResult.map((a, idx) => ({
-          athlete: a,
-          entry: entryByAthlete.get(a.id)!,
-          place: withResultPlaces[idx],
-        })),
-        ...withStatus.map((a) => ({ athlete: a, entry: entryByAthlete.get(a.id)!, place: null as number | null })),
-        ...noResult.map((a) => ({ athlete: a, entry: null as Entry | null, place: null as number | null })),
-      ];
-
-           return { ag, g, rows };
+    const withResult = eligibleAthletes.filter((a) => {
+      const e = entryByAthlete.get(a.id);
+      return e && !e.status && e.resultSeconds !== null;
     });
+    const withStatus = eligibleAthletes.filter((a) => {
+      const e = entryByAthlete.get(a.id);
+      return e && (e.status || e.resultSeconds === null);
+    });
+    const noResult = eligibleAthletes.filter((a) => !entryByAthlete.has(a.id));
+
+    withResult.sort((a, b) => {
+      const av = entryByAthlete.get(a.id)!.resultSeconds as number;
+      const bv = entryByAthlete.get(b.id)!.resultSeconds as number;
+      return eventConfig.cat === "track" ? av - bv : bv - av;
+    });
+    withStatus.sort((a, b) => a.fullName.localeCompare(b.fullName, "ru"));
+    noResult.sort((a, b) => a.fullName.localeCompare(b.fullName, "ru"));
+
+    const withResultPlaces = computePlaces(withResult, entryByAthlete);
+
+    const rows = [
+      ...withResult.map((a, idx) => ({
+        athlete: a,
+        entry: entryByAthlete.get(a.id)!,
+        place: withResultPlaces[idx],
+      })),
+      ...withStatus.map((a) => ({ athlete: a, entry: entryByAthlete.get(a.id)!, place: null as number | null })),
+      ...noResult.map((a) => ({ athlete: a, entry: null as Entry | null, place: null as number | null })),
+    ];
+
+    return { ag, g, rows };
+  });
 
   const hasAnyAthletes = categoryTables.some((c) => c.rows.length > 0);
 
@@ -360,7 +366,7 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
         <div className="flex items-center justify-between border-b border-white/10 pb-3 print:border-b-2 print:border-black">
           <div>
             <div className="hidden print:block text-xs uppercase font-bold text-gray-600">
-                            {currentMeet.name} • {currentMeet.date} ({currentMeet.place})
+              {currentMeet.name} • {currentMeet.date} ({currentMeet.place})
             </div>
             <div className="eyebrow print:hidden mb-1">Протокол дисциплины</div>
             <h3 className="text-2xl font-display tracking-wide print:text-2xl print:font-sans">
@@ -372,7 +378,7 @@ export default function ProtocolTable({ meetId, eventKey }: { meetId: string; ev
               )}
             </h3>
             <p className="text-[11px] text-muted print:hidden mt-1">
-              Нажмите на результат в таблице, чтобы ввести или изменить его. Enter — сохранить и перейти к следующему.
+              Нажмите на строку участника, чтобы ввести или изменить результат. Enter — сохранить и перейти к следующему.
             </p>
           </div>
 
