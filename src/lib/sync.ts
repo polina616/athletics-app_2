@@ -11,6 +11,10 @@ import { Athlete, Entry, Meet, RelayTeam, Team } from "./types";
  * побеждает" по updatedAt. Athletes синхронизируются так же, как teams,
  * плюс поле bib (стартовый номер) и Meet.eventParams (дистанция/этапы для
  * лыж/эстафеты).
+ *
+ * pullMeetsForOwner() — загрузка СПИСКА соревнований аккаунта: нужна на
+ * новом устройстве, где локальная база пуста и выбрать соревнование, чтобы
+ * запустить обычный pullRemote(meetId), ещё нельзя.
  */
 
 let syncing = false;
@@ -210,14 +214,14 @@ export async function pushDirty(meetId: string): Promise<{ ok: boolean; error?: 
         for (const e of dirtyEntries) await db.entries.update(e.id, { dirty: false });
       });
     }
-    
+
     if (dirtyRelayTeams.length) {
-  const { error } = await supabase.from("relay_teams").upsert(dirtyRelayTeams.map(relayTeamToRow));
-  if (error) throw error;
-  await db.transaction("rw", db.relayTeams, async () => {
-    for (const r of dirtyRelayTeams) await db.relayTeams.update(r.id, { dirty: false });
-  });
-}
+      const { error } = await supabase.from("relay_teams").upsert(dirtyRelayTeams.map(relayTeamToRow));
+      if (error) throw error;
+      await db.transaction("rw", db.relayTeams, async () => {
+        for (const r of dirtyRelayTeams) await db.relayTeams.update(r.id, { dirty: false });
+      });
+    }
 
     return { ok: true };
   } catch (err: any) {
@@ -226,7 +230,6 @@ export async function pushDirty(meetId: string): Promise<{ ok: boolean; error?: 
   }
 }
 
-
 // ---------- pull ----------
 
 export async function pullRemote(meetId: string): Promise<{ ok: boolean; error?: string }> {
@@ -234,39 +237,74 @@ export async function pullRemote(meetId: string): Promise<{ ok: boolean; error?:
     const since = await getLastSyncedAt(meetId);
     const sinceIso = since ?? "1970-01-01T00:00:00Z";
 
-   const [
-  { data: meetRows, error: meetErr },
-  { data: teamRows, error: teamErr },
-  { data: athleteRows, error: athleteErr },
-  { data: entryRows, error: entryErr },
-  { data: relayTeamRows, error: relayTeamErr },
-] = await Promise.all([
-  supabase.from("meets").select("*").eq("id", meetId).gt("updated_at", sinceIso),
-  supabase.from("teams").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
-  supabase.from("athletes").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
-  supabase.from("entries").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
-  supabase.from("relay_teams").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
-]);
-if (meetErr) throw meetErr;
-if (teamErr) throw teamErr;
-if (athleteErr) throw athleteErr;
-if (entryErr) throw entryErr;
-// relay_teams не должна блокировать загрузку остального, если таблицы ещё нет
-if (relayTeamErr) console.warn("[sync] relay_teams pull failed", relayTeamErr);
+    const [
+      { data: meetRows, error: meetErr },
+      { data: teamRows, error: teamErr },
+      { data: athleteRows, error: athleteErr },
+      { data: entryRows, error: entryErr },
+      { data: relayTeamRows, error: relayTeamErr },
+    ] = await Promise.all([
+      supabase.from("meets").select("*").eq("id", meetId).gt("updated_at", sinceIso),
+      supabase.from("teams").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
+      supabase.from("athletes").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
+      supabase.from("entries").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
+      supabase.from("relay_teams").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
+    ]);
 
-await db.transaction("rw", db.meets, db.teams, db.athletes, db.entries, db.relayTeams, async () => {
-  for (const r of meetRows ?? []) await mergeRemote(db.meets, rowToMeet(r));
-  for (const r of teamRows ?? []) await mergeRemote(db.teams, rowToTeam(r));
-  for (const r of athleteRows ?? []) await mergeRemote(db.athletes, rowToAthlete(r));
-  for (const r of entryRows ?? []) await mergeRemote(db.entries, rowToEntry(r));
-  for (const r of relayTeamRows ?? []) await mergeRemote(db.relayTeams, rowToRelayTeam(r));
-});
+    if (meetErr) throw meetErr;
+    if (teamErr) throw teamErr;
+    if (athleteErr) throw athleteErr;
+    if (entryErr) throw entryErr;
+    // relay_teams не должна блокировать загрузку остального, если таблицы ещё нет
+    if (relayTeamErr) console.warn("[sync] relay_teams pull failed", relayTeamErr);
+
+    await db.transaction("rw", db.meets, db.teams, db.athletes, db.entries, db.relayTeams, async () => {
+      for (const r of meetRows ?? []) await mergeRemote(db.meets, rowToMeet(r));
+      for (const r of teamRows ?? []) await mergeRemote(db.teams, rowToTeam(r));
+      for (const r of athleteRows ?? []) await mergeRemote(db.athletes, rowToAthlete(r));
+      for (const r of entryRows ?? []) await mergeRemote(db.entries, rowToEntry(r));
+      for (const r of relayTeamRows ?? []) await mergeRemote(db.relayTeams, rowToRelayTeam(r));
+    });
 
     await setLastSyncedAt(meetId, new Date().toISOString());
     return { ok: true };
   } catch (err: any) {
     console.error("[sync] pull failed", err);
     return { ok: false, error: err.message ?? String(err) };
+  }
+}
+
+/** Подтягивает с сервера ВСЕ соревнования этого пользователя (для нового
+ *  устройства/после очистки браузера) и, для ещё не синхронизированных
+ *  локально, — их команды, спортсменов и результаты. */
+export async function pullMeetsForOwner(ownerId: string): Promise<{ ok: boolean; error?: string }> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return { ok: false, error: "offline" };
+  try {
+    const { data, error } = await supabase.from("meets").select("*").eq("owner_id", ownerId);
+    if (error) throw error;
+
+    for (const r of data ?? []) {
+      await mergeRemote(db.meets, rowToMeet(r));
+      const since = await getLastSyncedAt(r.id);
+      if (!since) {
+        const res = await pullRemote(r.id);
+        if (!res.ok) console.warn("[sync] initial pull failed for meet", r.id, res.error);
+      }
+    }
+    return { ok: true };
+  } catch (err: any) {
+    console.error("[sync] pullMeetsForOwner failed", err);
+    return { ok: false, error: err.message ?? String(err) };
+  }
+}
+
+/** Переназначает локальные соревнования с чужим/старым ownerId на текущего
+ *  пользователя и помечает их dirty, чтобы они ушли на сервер. Использовать
+ *  только на своём личном устройстве. */
+export async function claimLocalMeets(ownerId: string): Promise<void> {
+  const foreign = await db.meets.filter((m) => m.ownerId !== ownerId).toArray();
+  for (const m of foreign) {
+    await db.meets.put({ ...m, ownerId, dirty: true, updatedAt: new Date().toISOString() });
   }
 }
 
@@ -317,27 +355,4 @@ export function startAutoSync(meetId: string, intervalMs = 15000) {
 export function stopAutoSync() {
   if (syncTimer) clearInterval(syncTimer);
   syncTimer = null;
-}
-/** Подтягивает с сервера ВСЕ соревнования этого пользователя (для нового
- *  устройства/после очистки браузера) и, для ещё не синхронизированных
- *  локально, — их команды, спортсменов и результаты. */
-export async function pullMeetsForOwner(ownerId: string): Promise<{ ok: boolean; error?: string }> {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return { ok: false, error: "offline" };
-  try {
-    const { data, error } = await supabase.from("meets").select("*").eq("owner_id", ownerId);
-    if (error) throw error;
-
-    for (const r of data ?? []) {
-      await mergeRemote(db.meets, rowToMeet(r));
-      const since = await getLastSyncedAt(r.id);
-      if (!since) {
-        const res = await pullRemote(r.id);
-        if (!res.ok) console.warn("[sync] initial pull failed for meet", r.id, res.error);
-      }
-    }
-    return { ok: true };
-  } catch (err: any) {
-    console.error("[sync] pullMeetsForOwner failed", err);
-    return { ok: false, error: err.message ?? String(err) };
-  }
 }
