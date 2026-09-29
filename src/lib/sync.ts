@@ -247,7 +247,12 @@ export async function pullRemote(meetId: string): Promise<{ ok: boolean; error?:
   supabase.from("entries").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
   supabase.from("relay_teams").select("*").eq("meet_id", meetId).gt("updated_at", sinceIso),
 ]);
-if (relayTeamErr) throw relayTeamErr;
+if (meetErr) throw meetErr;
+if (teamErr) throw teamErr;
+if (athleteErr) throw athleteErr;
+if (entryErr) throw entryErr;
+// relay_teams не должна блокировать загрузку остального, если таблицы ещё нет
+if (relayTeamErr) console.warn("[sync] relay_teams pull failed", relayTeamErr);
 
 await db.transaction("rw", db.meets, db.teams, db.athletes, db.entries, db.relayTeams, async () => {
   for (const r of meetRows ?? []) await mergeRemote(db.meets, rowToMeet(r));
